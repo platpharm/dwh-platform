@@ -1,0 +1,22 @@
+# FastAPI
+fastapi==0.109.0
+uvicorn==0.27.0
+pydantic==2.5.3
+
+# Elasticsearch
+elasticsearch==8.11.1
+
+# 크롤링 라이브러리
+httpx==0.26.0
+beautifulsoup4==4.12.2
+lxml==5.1.0
+
+# Google Trends
+pytrends==4.9.2
+
+# 네이버 API
+requests==2.31.0
+
+# 유틸리티
+python-dotenv==1.0.0
+tenacity==8.2.3

@@ -1,0 +1,47 @@
+"""Crawler Service - FastAPI 엔트리포인트"""
+
+from fastapi import FastAPI
+from contextlib import asynccontextmanager
+
+from shared.clients.es_client import es_client
+from src.api import router
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """애플리케이션 라이프사이클 관리"""
+    # Startup
+    print("Crawler Service starting...")
+    if es_client.health_check():
+        print("Elasticsearch connection: OK")
+    else:
+        print("Elasticsearch connection: FAILED")
+    yield
+    # Shutdown
+    print("Crawler Service shutting down...")
+
+
+app = FastAPI(
+    title="TipsDips Crawler Service",
+    description="트렌드 데이터 크롤링 서비스 (네이버 데이터랩, 구글 트렌드, 논문)",
+    version="0.1.0",
+    lifespan=lifespan,
+)
+
+# 라우터 등록
+app.include_router(router, prefix="")
+
+
+@app.get("/")
+async def root():
+    """루트 엔드포인트"""
+    return {
+        "service": "TipsDips Crawler Service",
+        "version": "0.1.0",
+        "endpoints": [
+            "/health",
+            "/crawl/naver",
+            "/crawl/google",
+            "/crawl/papers",
+        ],
+    }

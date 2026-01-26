@@ -1,0 +1,1 @@
+# TipsDips Shared Module
