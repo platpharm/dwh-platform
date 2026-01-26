@@ -35,12 +35,22 @@ class ElasticsearchConfig:
 # 인덱스 Alias 정의
 class ESIndex:
     """Elasticsearch 인덱스 Alias"""
+    # Raw data
+    TREND_RAW = "medi-trend-raw"
     TREND_DATA = "medi-trend-trend-data"
+
+    # Preprocessed data
+    PREPROCESSED_ORDER = "medi-trend-preprocessed-order"
+    PREPROCESSED_PRODUCT = "medi-trend-preprocessed-product"
+    PREPROCESSED_PHARMACY = "medi-trend-preprocessed-pharmacy"
+
+    # Mapping and results
     TREND_PRODUCT_MAPPING = "medi-trend-product-mapping"
     CLUSTERING_RESULT = "medi-trend-clustering-result"
     FORECASTING_RESULT = "medi-trend-forecasting-result"
     RANKING_RESULT = "medi-trend-ranking-result"
     TARGETING_RESULT = "medi-trend-targeting-result"
+    VECTOR_STORE = "medi-trend-vectors"
 
 
 # 싱글톤 설정 인스턴스

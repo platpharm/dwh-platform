@@ -219,10 +219,10 @@ class KeywordExtractor:
         # 매칭 임계값 확인 (0.5 이상일 때만 매칭)
         if best_match_score >= 0.5 and best_match_type:
             return TrendProductMapping(
-                trend_keyword=trend_keyword,
+                keyword=trend_keyword,
                 product_id=product["id"],
                 product_name=product["name"],
-                match_type=best_match_type,
+                keyword_source=best_match_type,
                 match_score=best_match_score,
                 trend_score=trend_score,
                 timestamp=datetime.now()

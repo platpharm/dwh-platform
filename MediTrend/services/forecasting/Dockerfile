@@ -2,11 +2,12 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# 시스템 의존성 설치 (Prophet 빌드 필요)
+# 시스템 의존성 설치 (Prophet 빌드 필요 + curl for healthcheck)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     g++ \
     libffi-dev \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Python 의존성 설치

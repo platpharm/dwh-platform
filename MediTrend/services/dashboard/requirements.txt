@@ -11,6 +11,9 @@ folium>=0.15.0
 streamlit-folium>=0.15.0
 pydeck>=0.8.0
 
+# Database
+psycopg2-binary>=2.9.9
+
 # Elasticsearch
 elasticsearch>=8.11.0
 

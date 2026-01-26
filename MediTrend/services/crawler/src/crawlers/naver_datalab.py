@@ -118,9 +118,9 @@ class NaverDatalabCrawler:
                 trend_data = TrendData(
                     keyword=keyword,
                     source="naver",
-                    score=float(ratio),
-                    timestamp=timestamp,
-                    raw_data={
+                    value=float(ratio),
+                    date=timestamp,
+                    metadata={
                         "period": period,
                         "ratio": ratio,
                         "keywords": result.get("keywords", []),
@@ -147,7 +147,7 @@ class NaverDatalabCrawler:
         documents = [
             {
                 **data.model_dump(),
-                "timestamp": data.timestamp.isoformat(),
+                "date": data.date.isoformat(),
             }
             for data in trend_data_list
         ]

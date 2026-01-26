@@ -229,9 +229,9 @@ class PaperCrawler:
             trend_data = TrendData(
                 keyword=keyword,
                 source="paper",
-                score=score,
-                timestamp=paper.get("pub_date", datetime.now()),
-                raw_data={
+                value=score,
+                date=paper.get("pub_date", datetime.now()),
+                metadata={
                     "title": paper.get("title", ""),
                     "abstract": paper.get("abstract", ""),
                     "paper_id": paper.get("paper_id", ""),
@@ -272,7 +272,7 @@ class PaperCrawler:
         documents = [
             {
                 **data.model_dump(),
-                "timestamp": data.timestamp.isoformat(),
+                "date": data.date.isoformat(),
             }
             for data in trend_data_list
         ]

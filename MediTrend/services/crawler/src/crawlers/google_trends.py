@@ -145,18 +145,24 @@ class GoogleTrendsCrawler:
                 else:
                     dt = timestamp
 
-                raw_data = {"score": score}
+                metadata = {"score": score}
 
                 # 연관 검색어 추가
+                related_keywords = None
                 if related_data and keyword in related_data:
-                    raw_data["related_queries"] = related_data[keyword]
+                    metadata["related_queries"] = related_data[keyword]
+                    # Extract related keywords from top queries
+                    top_queries = related_data[keyword].get("top", [])
+                    if top_queries:
+                        related_keywords = [q.get("query", "") for q in top_queries[:10] if q.get("query")]
 
                 trend_data = TrendData(
                     keyword=keyword,
                     source="google",
-                    score=float(score),
-                    timestamp=dt,
-                    raw_data=raw_data,
+                    value=float(score),
+                    date=dt,
+                    related_keywords=related_keywords,
+                    metadata=metadata,
                 )
                 trend_data_list.append(trend_data)
 
@@ -185,7 +191,7 @@ class GoogleTrendsCrawler:
         documents = [
             {
                 **data.model_dump(),
-                "timestamp": data.timestamp.isoformat(),
+                "date": data.date.isoformat(),
             }
             for data in trend_data_list
         ]
