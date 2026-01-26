@@ -8,7 +8,6 @@ Collectors Sub-module
     - PharmacyHIRACollector: 건강보험심사평가원 약국 정보
     - HospitalNICCollector: 국립중앙의료원 병원 정보
     - HospitalHIRACollector: 건강보험심사평가원 병원 정보
-    - ReviewNaverCollector: 네이버 지도 약국 리뷰
     - StoreSEMASCollector: 소상공인진흥공단 상가 정보
     - MedicalTypeCollector: 건강보험심사평가원 의료기관종별
     - HealthStatCollector: 건강보험심사평가원 보건의료 통계
@@ -20,7 +19,6 @@ from .pharmacy_nic import PharmacyNICCollector
 from .pharmacy_hira import PharmacyHIRACollector
 from .hospital_nic import HospitalNICCollector
 from .hospital_hira import HospitalHIRACollector
-from .review_naver import ReviewNaverCollector
 from .store_semas import StoreSEMASCollector
 from .medical_type import MedicalTypeCollector
 from .health_stat import HealthStatCollector
@@ -32,7 +30,6 @@ __all__ = [
     "PharmacyHIRACollector",
     "HospitalNICCollector",
     "HospitalHIRACollector",
-    "ReviewNaverCollector",
     "StoreSEMASCollector",
     "MedicalTypeCollector",
     "HealthStatCollector",

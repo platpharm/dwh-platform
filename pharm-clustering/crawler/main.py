@@ -43,7 +43,6 @@ COLLECTOR_REGISTRY: Dict[str, str] = {
     "pharmacy_hira": "collectors.pharmacy_hira.PharmacyHIRACollector",
     "hospital_nic": "collectors.hospital_nic.HospitalNICCollector",
     "hospital_hira": "collectors.hospital_hira.HospitalHIRACollector",
-    "review_naver": "collectors.review_naver.ReviewNaverCollector",
     "store_semas": "collectors.store_semas.StoreSEMASCollector",
     "medical_type": "collectors.medical_type.MedicalTypeCollector",
     "health_stat": "collectors.health_stat.HealthStatCollector",
@@ -343,7 +342,6 @@ def parse_args() -> argparse.Namespace:
   pharmacy_hira    - 건강보험심사평가원 약국 정보
   hospital_nic     - 국립중앙의료원 병원 정보
   hospital_hira    - 건강보험심사평가원 병원 정보
-  review_naver     - 네이버 지도 리뷰
   store_semas      - 소상공인진흥공단 상가 정보
   medical_type     - 의료기관종별 정보
   health_stat      - 보건의료 통계
@@ -404,7 +402,6 @@ def list_collectors() -> None:
         "pharmacy_hira": "건강보험심사평가원 약국 정보",
         "hospital_nic": "국립중앙의료원 병원 정보",
         "hospital_hira": "건강보험심사평가원 병원 정보",
-        "review_naver": "네이버 지도 리뷰",
         "store_semas": "소상공인진흥공단 상가 정보",
         "medical_type": "의료기관종별 정보",
         "health_stat": "보건의료 통계",

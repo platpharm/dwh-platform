@@ -4,7 +4,7 @@
 
 ## 개요
 
-10개 데이터 소스에서 약국/병원/상가 정보를 병렬 수집하여 Elasticsearch에 저장합니다.
+9개 데이터 소스에서 약국/병원/상가 정보를 병렬 수집하여 Elasticsearch에 저장합니다.
 
 ## 데이터 소스
 
@@ -14,7 +14,6 @@
 | `pharmacy_hira` | 건강보험심사평가원 | 약국 정보 |
 | `hospital_nic` | 국립중앙의료원 | 병원 정보 |
 | `hospital_hira` | 건강보험심사평가원 | 병원 정보 |
-| `review_naver` | 네이버 검색 API | 약국 리뷰 (블로그/카페) |
 | `store_semas` | 소상공인시장진흥공단 | 상가 정보 |
 | `medical_type` | 건강보험심사평가원 | 의료기관종별 |
 | `health_stat` | 건강보험심사평가원 | 보건의료 통계 |
@@ -96,7 +95,6 @@ crawler/
 │   ├── pharmacy_hira.py
 │   ├── hospital_nic.py
 │   ├── hospital_hira.py
-│   ├── review_naver.py
 │   ├── store_semas.py
 │   ├── medical_type.py
 │   ├── health_stat.py
