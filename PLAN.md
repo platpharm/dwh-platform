@@ -1,123 +1,169 @@
 # DWH Platform Deployment Plan
 
-## 병렬 에이전트로 수행 가능한 작업 목록
+## 현재 상태 (2026-01-26 업데이트)
 
-### Phase 1: 서비스 준비 (병렬 수행 가능)
+### 서비스 상태
 
-| 에이전트 | 작업 | 설명 |
-|---------|------|------|
-| Agent-1 | MediTrend Crawler 서비스 수정/빌드 | psycopg2, shared/models 의존성 수정 |
-| Agent-2 | MediTrend Preprocessor 서비스 수정/빌드 | 의존성 확인 및 빌드 |
-| Agent-3 | MediTrend Clustering 서비스 수정/빌드 | 의존성 확인 및 빌드 |
-| Agent-4 | MediTrend Forecasting 서비스 수정/빌드 | models 디렉토리 생성 및 빌드 |
-| Agent-5 | MediTrend Targeting 서비스 수정/빌드 | 의존성 확인 및 빌드 |
-| Agent-6 | MediTrend Dashboard 서비스 수정/빌드 | 의존성 확인 및 빌드 |
-| Agent-7 | Pharm-Clustering 서비스 빌드 | Dockerfile 확인 및 빌드 |
-| Agent-8 | Monitoring 서비스 빌드 | 모니터링 대시보드 빌드 |
+| 서비스 | 상태 | 포트 | 비고 |
+|--------|------|------|------|
+| airflow-postgres | ✅ healthy | - | 내부용 |
+| airflow-webserver | ✅ healthy | 8080 | admin/admin |
+| airflow-scheduler | ✅ running | - | |
+| meditrend-crawler | ✅ healthy | 8001 | Google Trends, Papers |
+| meditrend-preprocessor | ✅ healthy | 8002 | ES 인덱싱 추가됨 |
+| meditrend-clustering | ✅ healthy | 8003 | HDBSCAN 작동 확인 |
+| meditrend-forecasting | ✅ healthy | 8004 | 주문 데이터 필요 |
+| meditrend-targeting | ✅ healthy | 8005 | |
+| meditrend-dashboard | ✅ healthy | 8501 | Streamlit |
+| monitoring | ✅ healthy | 8888 | 통합 모니터링 |
 
-### Phase 2: 서비스 시작 (의존성에 따라 순차/병렬)
+### ES 인덱스 현황
+
+| 인덱스 | 문서 수 | 용도 |
+|--------|---------|------|
+| medi-trend-trend-data | 155 | Google Trends 데이터 |
+| medi-trend-product-mapping | 33,728 | 트렌드-상품 매핑 |
+| medi-trend-preprocessed-order | 432,915 | 주문 데이터 |
+| medi-trend-clustering-result | 10,000 | 클러스터링 결과 |
+| medi-trend-forecasting-result | 27,660 | 수요예측 결과 |
+| medi-trend-ranking-result | 1,422 | 인기도 랭킹 |
+
+---
+
+## 완료된 작업
+
+### Phase 1: 인프라 설정 ✅
+- [x] Docker Compose 통합 설정
+- [x] ES/PG 연결 설정 (AWS Secrets Manager)
+- [x] 모니터링 서비스 구축
+
+### Phase 2: 코드 수정 ✅
+- [x] Naver API 제거 (전체 코드베이스)
+- [x] ES HTTPS 연결 수정 (`verify_certs=False`)
+- [x] Order processor DB 스키마 수정 (`ordered_at` → `created_at`, `qty` → `order_qty`)
+- [x] Clustering ES 인덱싱 수정 (`entity_id` type: integer → long)
+- [x] Order processor ES 인덱싱 추가
+
+### Phase 3: 파이프라인 검증 ✅
+- [x] Google Trends 크롤러 실행 (155건)
+- [x] Preprocessor 상품 처리 (14,855건 → 33,728 매핑)
+- [x] Clustering 실행 (5개 클러스터, 10,000건)
+
+---
+
+### Phase 4: Forecasting 검증 ✅
+- [x] Order 데이터 ES 인덱싱 (432,915건)
+- [x] Forecasting 서비스 실행 (27,660건)
+- [x] 랭킹 계산 실행 (1,422건)
+
+### Phase 5: Targeting 검증 ✅
+- [x] Targeting 서비스 실행 (매칭 로직 작동 확인)
+
+---
+
+## 남은 작업
+
+### Phase 6: Dashboard 검증
+- [ ] Dashboard에서 전체 결과 시각화 확인
+- [ ] 약국 클러스터링 데이터 추가 (현재 상품만 클러스터링됨)
+
+---
+
+## 데이터 파이프라인
 
 ```
-[병렬 그룹 1 - 독립 서비스]
-├── airflow-postgres
-├── monitoring
-
-[병렬 그룹 2 - Airflow 초기화 후]
-├── airflow-webserver
-├── airflow-scheduler
-
-[병렬 그룹 3 - MSA 독립 서비스]
-├── meditrend-crawler
-├── meditrend-preprocessor
-├── meditrend-clustering
-├── meditrend-forecasting
-
-[순차 그룹 - 의존성 있음]
-├── meditrend-targeting (depends: clustering, forecasting)
-└── meditrend-dashboard (depends: targeting)
+[크롤링]
+Google Trends ──────────────────────┐
+Papers (PubMed, arXiv) ─────────────┤
+                                    ▼
+                          medi-trend-trend-data (ES)
+                                    │
+[전처리]                            │
+PostgreSQL (상품 14,855건) ─────────┼──► Preprocessor
+                                    │         │
+                                    ▼         ▼
+                     medi-trend-product-mapping (33,728건)
+                                    │
+[알고리즘]                          │
+        ┌───────────────────────────┴───────────────────────────┐
+        ▼                                                       ▼
+   Clustering (HDBSCAN)                              Forecasting (Prophet)
+        │                                                       │
+        ▼                                                       ▼
+medi-trend-clustering-result                    medi-trend-forecasting-result
+   (10,000건, 5 clusters)                            (주문 데이터 필요)
+        │                                                       │
+        └───────────────────────┬───────────────────────────────┘
+                                ▼
+                           Targeting
+                                │
+                                ▼
+                    medi-trend-targeting-result
+                                │
+                                ▼
+                           Dashboard
 ```
 
-### Phase 3: 헬스체크 및 모니터링 (병렬 수행 가능)
+---
 
-| 에이전트 | 작업 | 엔드포인트 |
-|---------|------|-----------|
-| Monitor-1 | Crawler 헬스체크 | http://localhost:8001/health |
-| Monitor-2 | Preprocessor 헬스체크 | http://localhost:8002/health |
-| Monitor-3 | Clustering 헬스체크 | http://localhost:8003/health |
-| Monitor-4 | Forecasting 헬스체크 | http://localhost:8004/health |
-| Monitor-5 | Targeting 헬스체크 | http://localhost:8005/health |
-| Monitor-6 | Dashboard 헬스체크 | http://localhost:8501 |
-| Monitor-7 | Airflow 헬스체크 | http://localhost:8080/health |
-| Monitor-8 | Monitoring 대시보드 | http://localhost:8888/health |
+## 환경 변수
 
-### Phase 4: 오류 수정 (병렬 리서치 에이전트)
-
-| 리서치 에이전트 | 담당 서비스 | 작업 |
-|----------------|------------|------|
-| Research-1 | Crawler | 로그 분석 및 오류 진단 |
-| Research-2 | Preprocessor | 로그 분석 및 오류 진단 |
-| Research-3 | Clustering | 로그 분석 및 오류 진단 |
-| Research-4 | Forecasting | 로그 분석 및 오류 진단 |
-| Research-5 | Targeting | 로그 분석 및 오류 진단 |
-| Research-6 | Dashboard | 로그 분석 및 오류 진단 |
-
-## 현재 상태
-
-### 실행 중인 서비스
-- [x] dwh-airflow-postgres (healthy)
-- [x] dwh-airflow-webserver (healthy)
-- [x] dwh-airflow-scheduler (running)
-- [x] dwh-monitoring (healthy)
-- [ ] dwh-meditrend-targeting (healthy but ES 연결 필요)
-
-### 수정 필요 서비스
-- [ ] dwh-meditrend-crawler (unhealthy - ES 연결 실패)
-- [ ] dwh-meditrend-preprocessor (unhealthy - ES 연결 실패)
-- [ ] dwh-meditrend-clustering (unhealthy - ES 연결 실패)
-- [ ] dwh-meditrend-forecasting (starting - 확인 필요)
-- [ ] dwh-meditrend-dashboard (unhealthy - 의존성 문제)
-
-## 서비스 포트 매핑
-
-| 서비스 | 포트 | 설명 |
-|--------|------|------|
-| Airflow Webserver | 8080 | Airflow UI (admin/admin) |
-| Crawler | 8001 | 크롤링 서비스 |
-| Preprocessor | 8002 | 전처리 서비스 |
-| Clustering | 8003 | 클러스터링 서비스 |
-| Forecasting | 8004 | 수요예측 서비스 |
-| Targeting | 8005 | 타겟팅 서비스 |
-| Dashboard | 8501 | Streamlit 대시보드 |
-| Monitoring | 8888 | 모니터링 대시보드 |
-
-## 병렬 수행 명령어
-
-### 모든 서비스 병렬 빌드
 ```bash
-docker-compose build \
-  meditrend-crawler \
-  meditrend-preprocessor \
-  meditrend-clustering \
-  meditrend-forecasting \
-  meditrend-targeting \
-  meditrend-dashboard \
-  monitoring \
-  --parallel
+# .env 파일 (AWS Secrets Manager에서 가져옴)
+ES_HOST=host.docker.internal
+ES_PORT=54321
+ES_SCHEME=https
+ES_USERNAME=platpharm
+ES_PASSWORD=***
+
+PG_HOST=host.docker.internal
+PG_PORT=12345
+PG_DATABASE=platpharm
+PG_USER=postgres
+PG_PASSWORD=***
 ```
 
-### 서비스 병렬 헬스체크
+---
+
+## 명령어 참조
+
+### 전체 서비스 시작
 ```bash
-curl -s http://localhost:8001/health & \
-curl -s http://localhost:8002/health & \
-curl -s http://localhost:8003/health & \
-curl -s http://localhost:8004/health & \
-curl -s http://localhost:8005/health & \
-curl -s http://localhost:8888/health & \
-wait
+docker-compose up -d
 ```
 
-## 다음 단계
+### 파이프라인 수동 실행
+```bash
+# 1. 크롤링
+curl -X POST http://localhost:8001/crawl/google \
+  -H "Content-Type: application/json" \
+  -d '{"keywords": ["비타민", "영양제", "감기약"]}'
 
-1. **병렬 에이전트로 각 서비스 오류 진단 및 수정**
-2. **병렬 에이전트로 헬스체크 모니터링**
-3. **오케스트레이션 에이전트 구현**
+# 2. 전처리
+curl -X POST http://localhost:8002/preprocess/products
+curl -X POST http://localhost:8002/preprocess/orders
+
+# 3. 클러스터링
+curl -X POST http://localhost:8003/cluster/run \
+  -H "Content-Type: application/json" \
+  -d '{"algorithm": "hdbscan", "entity_type": "product"}'
+
+# 4. 수요예측
+curl -X POST http://localhost:8004/forecast/run \
+  -H "Content-Type: application/json" \
+  -d '{"days_ahead": 30}'
+
+# 5. 타겟팅
+curl -X POST http://localhost:8005/target/run \
+  -H "Content-Type: application/json" \
+  -d '{"top_n_products": 100}'
+```
+
+### 상태 확인
+```bash
+# 모니터링 대시보드
+curl http://localhost:8888/
+
+# ES 인덱스 확인
+curl http://localhost:8888/es/indices
+```

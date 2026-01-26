@@ -114,7 +114,7 @@ class PGClient:
     ) -> List[Dict[str, Any]]:
         """주문 상세 데이터 조회"""
         query = """
-            SELECT od.*, o.account_id, o.ordered_at
+            SELECT od.*, o.account_id, o.created_at as ordered_at
             FROM orders_detail od
             JOIN orders o ON od.order_id = o.id
             WHERE od.deleted_at IS NULL

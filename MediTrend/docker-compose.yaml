@@ -3,6 +3,9 @@ version: '3.8'
 x-common-env: &common-env
   ES_HOST: host.docker.internal
   ES_PORT: 54321
+  ES_SCHEME: ${ES_SCHEME:-https}
+  ES_USERNAME: ${ES_USERNAME:-}
+  ES_PASSWORD: ${ES_PASSWORD:-}
   PG_HOST: host.docker.internal
   PG_PORT: 12345
   PG_DATABASE: platpharm

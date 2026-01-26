@@ -17,30 +17,63 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+def get_expected_mappings():
+    """Expected index mappings for clustering results"""
+    return {
+        "properties": {
+            "entity_type": {"type": "keyword"},
+            "entity_id": {"type": "long"},  # Use long for large product IDs
+            "cluster_id": {"type": "integer"},
+            "algorithm": {"type": "keyword"},
+            "features": {"type": "object", "enabled": True},
+            "umap_coords": {"type": "float"},
+            "timestamp": {"type": "date"}
+        }
+    }
+
+
 def ensure_index_exists():
-    """클러스터링 결과 인덱스 생성"""
-    if not es_client.index_exists(ESIndex.CLUSTERING_RESULT):
-        mappings = {
-            "properties": {
-                "entity_type": {"type": "keyword"},
-                "entity_id": {"type": "integer"},
-                "cluster_id": {"type": "integer"},
-                "algorithm": {"type": "keyword"},
-                "features": {"type": "object", "enabled": True},
-                "umap_coords": {"type": "float"},
-                "timestamp": {"type": "date"}
-            }
-        }
-        settings = {
-            "number_of_shards": 1,
-            "number_of_replicas": 0
-        }
+    """클러스터링 결과 인덱스 생성 또는 재생성 (매핑 불일치 시)"""
+    index_name = ESIndex.CLUSTERING_RESULT
+    mappings = get_expected_mappings()
+    settings = {
+        "number_of_shards": 1,
+        "number_of_replicas": 0
+    }
+
+    if not es_client.index_exists(index_name):
         es_client.create_index(
-            index=ESIndex.CLUSTERING_RESULT,
+            index=index_name,
             mappings=mappings,
             settings=settings
         )
-        logger.info(f"Created index: {ESIndex.CLUSTERING_RESULT}")
+        logger.info(f"Created index: {index_name}")
+    else:
+        # Check if entity_id mapping is correct (should be 'long', not 'integer')
+        try:
+            current_mapping = es_client.client.indices.get_mapping(index=index_name)
+            entity_id_type = (
+                current_mapping[index_name]["mappings"]
+                .get("properties", {})
+                .get("entity_id", {})
+                .get("type")
+            )
+
+            if entity_id_type == "integer":
+                logger.warning(
+                    f"Index {index_name} has entity_id mapped as 'integer', "
+                    "but 'long' is required for large product IDs. Recreating index..."
+                )
+                # Delete and recreate with correct mapping
+                es_client.client.indices.delete(index=index_name)
+                es_client.create_index(
+                    index=index_name,
+                    mappings=mappings,
+                    settings=settings
+                )
+                logger.info(f"Recreated index: {index_name} with correct mapping")
+        except Exception as e:
+            logger.error(f"Error checking/updating index mapping: {e}")
 
 
 @asynccontextmanager
