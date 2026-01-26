@@ -55,6 +55,7 @@ MEDITREND_SERVICES = {
 # 환경 변수
 ES_HOST = os.getenv("ES_HOST", "host.docker.internal")
 ES_PORT = int(os.getenv("ES_PORT", "54321"))
+ES_SCHEME = os.getenv("ES_SCHEME", "https")
 ES_USERNAME = os.getenv("ES_USERNAME", "")
 ES_PASSWORD = os.getenv("ES_PASSWORD", "")
 
@@ -97,9 +98,10 @@ def check_elasticsearch() -> ServiceStatus:
     try:
         auth = (ES_USERNAME, ES_PASSWORD) if ES_USERNAME and ES_PASSWORD else None
         es = Elasticsearch(
-            hosts=[{"host": ES_HOST, "port": ES_PORT, "scheme": "http"}],
+            hosts=[{"host": ES_HOST, "port": ES_PORT, "scheme": ES_SCHEME}],
             basic_auth=auth,
             request_timeout=5,
+            verify_certs=False,
         )
 
         if es.ping():
@@ -219,8 +221,9 @@ async def get_es_indices():
     try:
         auth = (ES_USERNAME, ES_PASSWORD) if ES_USERNAME and ES_PASSWORD else None
         es = Elasticsearch(
-            hosts=[{"host": ES_HOST, "port": ES_PORT, "scheme": "http"}],
+            hosts=[{"host": ES_HOST, "port": ES_PORT, "scheme": ES_SCHEME}],
             basic_auth=auth,
+            verify_certs=False,
         )
 
         indices = es.cat.indices(format="json")
