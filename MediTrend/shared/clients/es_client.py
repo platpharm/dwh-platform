@@ -13,6 +13,7 @@ class ESClient:
             basic_auth=(es_config.username, es_config.password)
             if es_config.username and es_config.password else None,
             request_timeout=30,
+            verify_certs=False,
         )
 
     def health_check(self) -> bool:
