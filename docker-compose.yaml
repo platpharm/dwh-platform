@@ -23,8 +23,6 @@ x-pharm-crawler-env: &pharm-crawler-env
   RDBMS_USER: ${PG_USER:-postgres}
   RDBMS_PASSWORD: ${PG_PASSWORD:-}
   DATA_GO_KR_API_KEY: ${DATA_GO_KR_API_KEY:-}
-  NAVER_CLIENT_ID: ${NAVER_CLIENT_ID:-}
-  NAVER_CLIENT_SECRET: ${NAVER_CLIENT_SECRET:-}
   TZ: Asia/Seoul
 
 networks:

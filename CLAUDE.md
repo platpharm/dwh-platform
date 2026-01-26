@@ -42,7 +42,7 @@ python main.py --dry-run                # Test configuration
 HTTP-orchestrated microservices with Airflow:
 
 ```
-Crawlers (Naver/Google/Papers) → Preprocessor (KoNLPy) → [Clustering | Forecasting] → Targeting → Dashboard
+Crawlers (Google/Papers) → Preprocessor (KoNLPy) → [Clustering | Forecasting] → Targeting → Dashboard
 ```
 
 **Tech Stack**: FastAPI 0.109, Airflow 2.7, PostgreSQL (source), Elasticsearch (results), Streamlit (dashboard)
@@ -58,7 +58,7 @@ Crawlers (Naver/Google/Papers) → Preprocessor (KoNLPy) → [Clustering | Forec
 
 Plugin-based collector architecture with ThreadPoolExecutor (10 workers default):
 
-**Collectors**: pharmacy_nic, pharmacy_hira, hospital_nic, hospital_hira, review_naver, store_semas, medical_type, health_stat, order_platpharm, building_ledger
+**Collectors**: pharmacy_nic, pharmacy_hira, hospital_nic, hospital_hira, store_semas, medical_type, health_stat, order_platpharm, building_ledger
 
 **Key files**:
 - `crawler/main.py` - Orchestrator with CLI
@@ -82,7 +82,7 @@ git subtree push --prefix=pharm-clustering https://github.com/platpharm/pharm-cl
 Both projects require `.env` files (see `.env.example` in each project):
 - PostgreSQL tunnel: `host.docker.internal:12345`
 - Elasticsearch credentials
-- API keys: Naver Search API, data.go.kr
+- API keys: data.go.kr
 
 ## Key Conventions
 

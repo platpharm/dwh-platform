@@ -42,20 +42,6 @@ with DAG(
     # ============================================================
     with TaskGroup('crawling', tooltip='트렌드 데이터 크롤링') as crawling_group:
 
-        crawl_naver = SimpleHttpOperator(
-            task_id='crawl_naver_trends',
-            http_conn_id='crawler_service',
-            endpoint='/crawl/naver',
-            method='POST',
-            headers={'Content-Type': 'application/json'},
-            data=json.dumps({
-                'keywords': ['비타민', '영양제', '감기약', '진통제', '소화제',
-                            '피부약', '탈모', '다이어트', '면역력', '피로회복']
-            }),
-            response_check=lambda response: response.json().get('success', False),
-            log_response=True,
-        )
-
         crawl_google = SimpleHttpOperator(
             task_id='crawl_google_trends',
             http_conn_id='crawler_service',

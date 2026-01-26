@@ -18,12 +18,6 @@ default_args = {
 }
 
 # 트렌드 수집 키워드 정의
-HEALTH_KEYWORDS_KR = [
-    '비타민', '영양제', '감기약', '진통제', '소화제',
-    '피부약', '탈모', '다이어트', '면역력', '피로회복',
-    '수면제', '변비약', '위장약', '알레르기', '눈영양제'
-]
-
 HEALTH_KEYWORDS_EN = [
     'vitamin', 'supplement', 'pain relief', 'cold medicine',
     'digestive', 'skin care', 'hair loss', 'diet', 'immunity',
@@ -47,50 +41,6 @@ with DAG(
     catchup=False,
     tags=['meditrend', 'crawling'],
 ) as dag:
-
-    # ============================================================
-    # 네이버 데이터랩 크롤링
-    # ============================================================
-    with TaskGroup('naver_crawling', tooltip='네이버 데이터랩') as naver_group:
-
-        crawl_naver_health = SimpleHttpOperator(
-            task_id='crawl_naver_health_keywords',
-            http_conn_id='crawler_service',
-            endpoint='/crawl/naver',
-            method='POST',
-            headers={'Content-Type': 'application/json'},
-            data=json.dumps({
-                'keywords': HEALTH_KEYWORDS_KR[:5]  # API 제한: 5개씩
-            }),
-            response_check=lambda response: response.json().get('success', False),
-            log_response=True,
-        )
-
-        crawl_naver_health_2 = SimpleHttpOperator(
-            task_id='crawl_naver_health_keywords_2',
-            http_conn_id='crawler_service',
-            endpoint='/crawl/naver',
-            method='POST',
-            headers={'Content-Type': 'application/json'},
-            data=json.dumps({
-                'keywords': HEALTH_KEYWORDS_KR[5:10]
-            }),
-            response_check=lambda response: response.json().get('success', False),
-            log_response=True,
-        )
-
-        crawl_naver_health_3 = SimpleHttpOperator(
-            task_id='crawl_naver_health_keywords_3',
-            http_conn_id='crawler_service',
-            endpoint='/crawl/naver',
-            method='POST',
-            headers={'Content-Type': 'application/json'},
-            data=json.dumps({
-                'keywords': HEALTH_KEYWORDS_KR[10:15]
-            }),
-            response_check=lambda response: response.json().get('success', False),
-            log_response=True,
-        )
 
     # ============================================================
     # 구글 트렌드 크롤링
@@ -158,4 +108,4 @@ with DAG(
     )
 
     # 병렬 실행
-    [naver_group, google_group, crawl_papers]
+    [google_group, crawl_papers]

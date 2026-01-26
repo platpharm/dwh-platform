@@ -18,10 +18,6 @@ class Config:
     # 공공데이터 포털 (data.go.kr) API
     DATA_GO_KR_API_KEY = os.getenv("DATA_GO_KR_API_KEY", "")
 
-    # 네이버 API
-    NAVER_CLIENT_ID = os.getenv("NAVER_CLIENT_ID", "")
-    NAVER_CLIENT_SECRET = os.getenv("NAVER_CLIENT_SECRET", "")
-
     # Elasticsearch 설정
     ES_HOST = os.getenv("ES_HOST", "localhost")
     ES_PORT = int(os.getenv("ES_PORT", "54321"))
@@ -72,10 +68,6 @@ CONFIG = {
     },
     "data_go_kr": {
         "service_key": config.DATA_GO_KR_API_KEY,
-    },
-    "naver": {
-        "client_id": config.NAVER_CLIENT_ID,
-        "client_secret": config.NAVER_CLIENT_SECRET,
     },
     "rdbms": {
         "host": config.RDBMS_HOST,

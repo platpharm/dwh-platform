@@ -4,7 +4,7 @@
 
 ## 개요
 
-9개 데이터 소스에서 약국/병원/상가 정보를 병렬 수집하여 Elasticsearch에 저장합니다.
+공공데이터 소스에서 약국/병원/상가 정보를 병렬 수집하여 Elasticsearch에 저장합니다.
 
 ## 데이터 소스
 
@@ -38,10 +38,6 @@ cp .env.example .env
 ```env
 # 공공데이터 API (data.go.kr)
 DATA_GO_KR_API_KEY=your_api_key
-
-# 네이버 API
-NAVER_CLIENT_ID=your_client_id
-NAVER_CLIENT_SECRET=your_client_secret
 
 # Elasticsearch
 ES_HOST=localhost

@@ -9,8 +9,6 @@ x-common-env: &common-env
   RDBMS_USER: ${RDBMS_USER:-postgres}
   RDBMS_PASSWORD: ${RDBMS_PASSWORD:-}
   DATA_GO_KR_API_KEY: ${DATA_GO_KR_API_KEY:-}
-  NAVER_CLIENT_ID: ${NAVER_CLIENT_ID:-}
-  NAVER_CLIENT_SECRET: ${NAVER_CLIENT_SECRET:-}
   TZ: Asia/Seoul
 
 services:
