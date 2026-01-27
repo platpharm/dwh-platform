@@ -27,12 +27,118 @@ router = APIRouter()
 clustering_jobs: Dict[str, Dict[str, Any]] = {}
 
 
-def _fetch_product_data() -> tuple:
-    """ES에서 상품 데이터 조회
+def _label_encode(values: List[str]) -> List[int]:
+    """문자열 리스트를 정수로 라벨 인코딩"""
+    unique = sorted(set(values))
+    mapping = {v: i for i, v in enumerate(unique)}
+    return [mapping[v] for v in values]
 
-    TREND_PRODUCT_MAPPING에서 trend_score, match_score를 조회하고
-    CDC_PRODUCT에서 상품명 등 추가 정보를 조인
+
+def _fetch_order_stats_by_product() -> Dict[str, Dict[str, float]]:
+    """orders_detail에서 상품별 주문 통계 집계"""
+    aggs = {
+        "by_product": {
+            "terms": {
+                "field": "product_id",
+                "size": 50000
+            },
+            "aggs": {
+                "total_qty": {"sum": {"field": "order_qty"}},
+                "total_amount": {"sum": {"field": "product_amount"}},
+                "unique_buyers": {"cardinality": {"field": "account_id"}},
+                "avg_order_price": {"avg": {"field": "order_price"}},
+            }
+        }
+    }
+
+    try:
+        result = es_client.aggregate(
+            index=ESIndex.CDC_ORDERS_DETAIL,
+            query={"match_all": {}},
+            aggs=aggs
+        )
+        stats = {}
+        for bucket in result.get("by_product", {}).get("buckets", []):
+            stats[bucket["key"]] = {
+                "total_order_qty": bucket["total_qty"]["value"] or 0,
+                "total_order_amount": bucket["total_amount"]["value"] or 0,
+                "unique_buyers": bucket["unique_buyers"]["value"] or 0,
+                "avg_order_price": bucket["avg_order_price"]["value"] or 0,
+            }
+        logger.info(f"Loaded order stats for {len(stats)} products")
+        return stats
+    except Exception as e:
+        logger.warning(f"Failed to fetch order stats: {e}")
+        return {}
+
+
+def _fetch_kims_data() -> Dict[str, Dict[str, str]]:
+    """KIMS 매핑 + KIMS 약품 데이터 조회 → product_id별 성분/분류 정보"""
+    # 1) product_kims_mapping: product_id → kims_drug_code
+    product_kims_map = {}
+    kims_codes_needed = set()
+    try:
+        for doc in es_client.scroll_search(
+            index=ESIndex.CDC_PRODUCT_KIMS_MAPPING,
+            query={"match_all": {}},
+            size=1000
+        ):
+            pid = doc.get("product_id")
+            kcode = doc.get("kims_drug_code")
+            if pid and kcode:
+                product_kims_map[str(pid)] = kcode
+                kims_codes_needed.add(kcode)
+    except Exception as e:
+        logger.warning(f"Failed to fetch KIMS mapping: {e}")
+        return {}
+
+    logger.info(f"Loaded {len(product_kims_map)} product-KIMS mappings")
+
+    if not kims_codes_needed:
+        return {}
+
+    # 2) kims_edis_indexdb: DrugCode → ATCCode, KIMSClsCode1, MOHCls, Composition
+    kims_info = {}
+    try:
+        for doc in es_client.scroll_search(
+            index=ESIndex.CDC_KIMS,
+            query={"match_all": {}},
+            size=1000
+        ):
+            drug_code = doc.get("DrugCode")
+            if drug_code and drug_code in kims_codes_needed:
+                kims_info[drug_code] = {
+                    "atc_code": doc.get("ATCCode", ""),
+                    "kims_cls_code": doc.get("KIMSClsCode1", ""),
+                    "moh_cls": doc.get("MOHCls", ""),
+                    "composition": doc.get("Composition", ""),
+                    "generic_name": doc.get("GenericInfoKr", ""),
+                }
+    except Exception as e:
+        logger.warning(f"Failed to fetch KIMS drug data: {e}")
+
+    logger.info(f"Loaded KIMS info for {len(kims_info)} drugs")
+
+    # 3) product_id → KIMS 정보 매핑
+    result = {}
+    for pid, kcode in product_kims_map.items():
+        if kcode in kims_info:
+            result[pid] = kims_info[kcode]
+
+    logger.info(f"Matched {len(result)} products with KIMS data")
+    return result
+
+
+def _fetch_product_data() -> tuple:
+    """ES에서 상품 데이터 조회 (다차원 피처)
+
+    데이터 소스:
+    - TREND_PRODUCT_MAPPING: trend_score, match_score
+    - CDC_PRODUCT: 상품명, 카테고리, 가격, 상품유형, 제조사
+    - CDC_ORDERS_DETAIL: 주문수량, 매출액, 구매 약국 수
+    - KIMS: ATC 분류, KIMS 분류, 보건부 분류
     """
+    # 1) TREND_PRODUCT_MAPPING
     trend_data = {}
     for p in es_client.scroll_search(
         index=ESIndex.TREND_PRODUCT_MAPPING,
@@ -41,13 +147,14 @@ def _fetch_product_data() -> tuple:
     ):
         product_id = p.get("product_id")
         if product_id:
-            trend_data[int(product_id)] = {
+            trend_data[str(product_id)] = {
                 "trend_score": p.get("trend_score", 0),
                 "match_score": p.get("match_score", 0),
             }
 
     logger.info(f"Loaded {len(trend_data)} products from TREND_PRODUCT_MAPPING")
 
+    # 2) CDC_PRODUCT
     product_info = {}
     for p in es_client.scroll_search(
         index=ESIndex.CDC_PRODUCT,
@@ -56,57 +163,119 @@ def _fetch_product_data() -> tuple:
     ):
         product_id = p.get("id")
         if product_id:
-            try:
-                product_id_int = int(product_id)
-            except (ValueError, TypeError):
-                continue
-            product_info[product_id_int] = {
+            product_info[str(product_id)] = {
                 "product_name": p.get("name", ""),
                 "category1": p.get("category1", ""),
                 "category2": p.get("category2", ""),
                 "category3": p.get("category3", ""),
+                "price": p.get("price") or p.get("std_price") or 0,
+                "product_kind": p.get("product_kind", ""),
+                "mfr_name": p.get("mfr_name", ""),
             }
 
     logger.info(f"Loaded {len(product_info)} products from CDC_PRODUCT")
 
+    # 3) 주문 통계 집계
+    order_stats = _fetch_order_stats_by_product()
+
+    # 4) KIMS 성분/분류 데이터
+    kims_data = _fetch_kims_data()
+
+    # 5) 피처 조합 (trend_data에 있는 상품 기준)
     ids = []
-    features = []
-    raw_data = []
+    raw_data_list = []
+
+    # 카테고리/분류 라벨 인코딩을 위한 수집
+    cat1_values = []
+    cat2_values = []
+    product_kind_values = []
+    mfr_values = []
+    atc_values = []
+    kims_cls_values = []
 
     for product_id, scores in trend_data.items():
-        trend_score = float(scores.get("trend_score", 0))
-        match_score = float(scores.get("match_score", 0))
-
         info = product_info.get(product_id, {})
         product_name = info.get("product_name", "")
-
         if not product_name:
             continue
 
+        orders = order_stats.get(product_id, {})
+        kims = kims_data.get(product_id, {})
+
         ids.append(product_id)
 
-        feature_vector = [
-            trend_score,
-            match_score,
-        ]
-        features.append(feature_vector)
-
-        raw_data.append({
+        raw = {
             "product_id": product_id,
             "product_name": product_name,
-            "trend_score": trend_score,
-            "match_score": match_score,
+            # trend
+            "trend_score": float(scores.get("trend_score", 0)),
+            "match_score": float(scores.get("match_score", 0)),
+            # product
             "category1": info.get("category1", ""),
             "category2": info.get("category2", ""),
             "category3": info.get("category3", ""),
-        })
+            "price": float(info.get("price", 0)),
+            "product_kind": info.get("product_kind", ""),
+            "mfr_name": info.get("mfr_name", ""),
+            # order
+            "total_order_qty": float(orders.get("total_order_qty", 0)),
+            "total_order_amount": float(orders.get("total_order_amount", 0)),
+            "unique_buyers": float(orders.get("unique_buyers", 0)),
+            "avg_order_price": float(orders.get("avg_order_price", 0)),
+            # kims
+            "atc_code": kims.get("atc_code", ""),
+            "kims_cls_code": kims.get("kims_cls_code", ""),
+            "composition": kims.get("composition", ""),
+            "generic_name": kims.get("generic_name", ""),
+        }
+        raw_data_list.append(raw)
 
-    logger.info(f"Prepared {len(ids)} products for clustering (with names)")
+        cat1_values.append(raw["category1"])
+        cat2_values.append(raw["category2"])
+        product_kind_values.append(raw["product_kind"])
+        mfr_values.append(raw["mfr_name"])
+        atc_values.append(raw["atc_code"])
+        kims_cls_values.append(raw["kims_cls_code"])
 
     if not ids:
         return [], [], []
 
-    return ids, np.array(features), raw_data
+    # 라벨 인코딩
+    cat1_encoded = _label_encode(cat1_values)
+    cat2_encoded = _label_encode(cat2_values)
+    kind_encoded = _label_encode(product_kind_values)
+    mfr_encoded = _label_encode(mfr_values)
+    atc_encoded = _label_encode(atc_values)
+    kims_encoded = _label_encode(kims_cls_values)
+
+    # 수치 피처 + 인코딩된 범주형 피처
+    features = []
+    for i, raw in enumerate(raw_data_list):
+        feature_vector = [
+            # 수치형 피처
+            raw["trend_score"],
+            raw["match_score"],
+            raw["price"],
+            raw["total_order_qty"],
+            raw["total_order_amount"],
+            raw["unique_buyers"],
+            raw["avg_order_price"],
+            # 인코딩된 범주형 피처
+            float(cat1_encoded[i]),
+            float(cat2_encoded[i]),
+            float(kind_encoded[i]),
+            float(mfr_encoded[i]),
+            float(atc_encoded[i]),
+            float(kims_encoded[i]),
+        ]
+        features.append(feature_vector)
+
+    logger.info(
+        f"Prepared {len(ids)} products for clustering "
+        f"({len(features[0])} features: 7 numerical + 6 categorical)"
+    )
+
+    return ids, np.array(features), raw_data_list
 
 
 def _fetch_pharmacy_data() -> tuple:
@@ -115,7 +284,7 @@ def _fetch_pharmacy_data() -> tuple:
 
     try:
         pharmacies = es_client.search(
-            index="medi-trend-preprocessed-pharmacy",
+            index=ESIndex.PREPROCESSED_PHARMACY,
             query=query,
             size=10000
         )
@@ -157,7 +326,7 @@ def _save_clustering_results(
     documents = []
 
     for i, (entity_id, result, raw) in enumerate(zip(entity_ids, cluster_results, raw_data)):
-            if entity_type == "product":
+        if entity_type == "product":
             entity_name = raw.get("product_name") or raw.get("name")
         else:  # pharmacy
             entity_name = raw.get("name") or raw.get("host_name")

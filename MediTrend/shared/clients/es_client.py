@@ -169,6 +169,18 @@ class ESClient:
         except Exception:
             return None
 
+    def aggregate(
+        self,
+        index: str,
+        query: Dict[str, Any],
+        aggs: Dict[str, Any],
+        size: int = 0
+    ) -> Dict[str, Any]:
+        """집계 쿼리 실행"""
+        body = {"query": query, "size": size, "aggs": aggs}
+        response = self.client.search(index=index, body=body)
+        return response.get("aggregations", {})
+
     def delete_by_query(self, index: str, query: Dict[str, Any]) -> Dict[str, Any]:
         """쿼리로 문서 삭제"""
         return self.client.delete_by_query(index=index, body={"query": query})

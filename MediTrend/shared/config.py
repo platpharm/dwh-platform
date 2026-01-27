@@ -29,6 +29,8 @@ class ESIndex:
     CDC_ORDERS_DETAIL = "platpharm.public.orders_detail"
     CDC_PRODUCT = "platpharm.public.product"
     CDC_ACCOUNT = "platpharm.public.account"
+    CDC_PRODUCT_KIMS_MAPPING = "platpharm.public.product_kims_mapping"
+    CDC_KIMS = "platpharm.public.kims_edis_indexdb"
 
     # Raw data
     TREND_RAW = "medi-db-raw"
