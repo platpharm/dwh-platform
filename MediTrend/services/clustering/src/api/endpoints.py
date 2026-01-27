@@ -27,11 +27,12 @@ router = APIRouter()
 clustering_jobs: Dict[str, Dict[str, Any]] = {}
 
 
-def _label_encode(values: List[str]) -> List[int]:
-    """문자열 리스트를 정수로 라벨 인코딩"""
-    unique = sorted(set(values))
+def _label_encode(values: List[Optional[str]]) -> List[int]:
+    """문자열 리스트를 정수로 라벨 인코딩 (None은 빈 문자열로 치환)"""
+    cleaned = [v if v is not None else "" for v in values]
+    unique = sorted(set(cleaned))
     mapping = {v: i for i, v in enumerate(unique)}
-    return [mapping[v] for v in values]
+    return [mapping[v] for v in cleaned]
 
 
 def _fetch_order_stats_by_product() -> Dict[str, Dict[str, float]]:
