@@ -22,7 +22,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="TipsDips Crawler Service",
+    title="MediTrend Crawler Service",
     description="트렌드 데이터 크롤링 서비스 (구글 트렌드, 논문)",
     version="0.1.0",
     lifespan=lifespan,

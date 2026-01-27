@@ -81,8 +81,33 @@ git subtree push --prefix=pharm-clustering https://github.com/platpharm/pharm-cl
 
 Both projects require `.env` files (see `.env.example` in each project):
 - PostgreSQL tunnel: `host.docker.internal:12345`
-- Elasticsearch credentials
+- Elasticsearch tunnel: `host.docker.internal:54321` (HTTPS)
 - API keys: data.go.kr
+
+### AWS Secrets Manager
+
+Credentials are stored in AWS Secrets Manager:
+```bash
+# Elasticsearch credentials
+aws secretsmanager get-secret-value --secret-id platpharm-elasticsearch-prod --query SecretString --output text
+# Use "elastic" user with ELASTIC_PASSWORD
+
+# PostgreSQL credentials
+aws secretsmanager get-secret-value --secret-id prod/platpharm/postgresql --query SecretString --output text
+
+# Other secrets
+aws secretsmanager list-secrets --query "SecretList[*].Name" --output text
+```
+
+### SSH Tunnels (for local development)
+
+```bash
+# PostgreSQL tunnel (port 12345)
+ssh -L 12345:platpharm-prod-db-endpoint:5432 bastion-host
+
+# Elasticsearch tunnel (port 54321)
+ssh -L 54321:elasticsearch-prod-endpoint:9200 bastion-host
+```
 
 ## Key Conventions
 

@@ -1,6 +1,6 @@
 # DWH Platform Deployment Plan
 
-## 현재 상태 (2026-01-26 업데이트)
+## 현재 상태 (2026-01-27 업데이트)
 
 ### 서비스 상태
 
@@ -10,10 +10,10 @@
 | airflow-webserver | ✅ healthy | 8080 | admin/admin |
 | airflow-scheduler | ✅ running | - | |
 | meditrend-crawler | ✅ healthy | 8001 | Google Trends, Papers |
-| meditrend-preprocessor | ✅ healthy | 8002 | ES 인덱싱 추가됨 |
-| meditrend-clustering | ✅ healthy | 8003 | HDBSCAN 작동 확인 |
-| meditrend-forecasting | ✅ healthy | 8004 | 주문 데이터 필요 |
-| meditrend-targeting | ✅ healthy | 8005 | |
+| meditrend-preprocessor | ✅ healthy | 8002 | 주문/상품/약국 ES 인덱싱 |
+| meditrend-clustering | ✅ healthy | 8003 | HDBSCAN/GMM (상품+약국) |
+| meditrend-forecasting | ✅ healthy | 8004 | Prophet 예측 + 랭킹 |
+| meditrend-targeting | ✅ healthy | 8005 | 상품-약국 매칭 |
 | meditrend-dashboard | ✅ healthy | 8501 | Streamlit |
 | monitoring | ✅ healthy | 8888 | 통합 모니터링 |
 
@@ -24,9 +24,11 @@
 | medi-trend-trend-data | 155 | Google Trends 데이터 |
 | medi-trend-product-mapping | 33,728 | 트렌드-상품 매핑 |
 | medi-trend-preprocessed-order | 432,915 | 주문 데이터 |
-| medi-trend-clustering-result | 10,000 | 클러스터링 결과 |
+| medi-trend-preprocessed-pharmacy | 15,756 | 약국 데이터 |
+| medi-trend-clustering-result | 10,999 | 상품+약국 클러스터링 결과 |
 | medi-trend-forecasting-result | 27,660 | 수요예측 결과 |
-| medi-trend-ranking-result | 1,422 | 인기도 랭킹 |
+| medi-trend-ranking-result | 1,844 | 인기도 랭킹 |
+| medi-trend-targeting-result | 5,000 | 상품-약국 매칭 결과 |
 
 ---
 
@@ -41,31 +43,28 @@
 - [x] Naver API 제거 (전체 코드베이스)
 - [x] ES HTTPS 연결 수정 (`verify_certs=False`)
 - [x] Order processor DB 스키마 수정 (`ordered_at` → `created_at`, `qty` → `order_qty`)
-- [x] Clustering ES 인덱싱 수정 (`entity_id` type: integer → long)
+- [x] Clustering ES 인덱싱 수정 (`entity_id` type: integer → keyword)
 - [x] Order processor ES 인덱싱 추가
+- [x] Pharmacy processor ES 인덱싱 추가
+- [x] Account 테이블 컬럼명 수정 (`address` → `address1,2,3`, `phone` → `phone_number`)
 
 ### Phase 3: 파이프라인 검증 ✅
 - [x] Google Trends 크롤러 실행 (155건)
 - [x] Preprocessor 상품 처리 (14,855건 → 33,728 매핑)
-- [x] Clustering 실행 (5개 클러스터, 10,000건)
-
----
+- [x] Product Clustering 실행 (5개 클러스터, 10,000건)
 
 ### Phase 4: Forecasting 검증 ✅
 - [x] Order 데이터 ES 인덱싱 (432,915건)
 - [x] Forecasting 서비스 실행 (27,660건)
-- [x] 랭킹 계산 실행 (1,422건)
+- [x] 랭킹 계산 실행 (1,844건)
 
 ### Phase 5: Targeting 검증 ✅
-- [x] Targeting 서비스 실행 (매칭 로직 작동 확인)
+- [x] Pharmacy 데이터 ES 인덱싱 (15,756건)
+- [x] Pharmacy Clustering 실행 (GMM, 9,999건)
+- [x] Targeting 서비스 실행 (5,000건 매칭)
 
----
-
-## 남은 작업
-
-### Phase 6: Dashboard 검증
-- [ ] Dashboard에서 전체 결과 시각화 확인
-- [ ] 약국 클러스터링 데이터 추가 (현재 상품만 클러스터링됨)
+### Phase 6: Dashboard 검증 ✅
+- [x] Dashboard에서 전체 결과 시각화 확인 (http://localhost:8501)
 
 ---
 
@@ -80,22 +79,28 @@ Papers (PubMed, arXiv) ─────────────┤
                                     │
 [전처리]                            │
 PostgreSQL (상품 14,855건) ─────────┼──► Preprocessor
-                                    │         │
+PostgreSQL (약국 15,756건) ─────────┤         │
+PostgreSQL (주문 432,915건) ────────┤         │
                                     ▼         ▼
                      medi-trend-product-mapping (33,728건)
+                     medi-trend-preprocessed-pharmacy (15,756건)
+                     medi-trend-preprocessed-order (432,915건)
                                     │
 [알고리즘]                          │
         ┌───────────────────────────┴───────────────────────────┐
         ▼                                                       ▼
-   Clustering (HDBSCAN)                              Forecasting (Prophet)
+   Clustering (HDBSCAN/GMM)                         Forecasting (Prophet)
+   - Products: 10,000건                              - 27,660건 예측
+   - Pharmacies: 9,999건                             - 1,844건 랭킹
         │                                                       │
         ▼                                                       ▼
 medi-trend-clustering-result                    medi-trend-forecasting-result
-   (10,000건, 5 clusters)                            (주문 데이터 필요)
+   (10,999건)                                   medi-trend-ranking-result
         │                                                       │
         └───────────────────────┬───────────────────────────────┘
                                 ▼
                            Targeting
+                        (5,000건 매칭)
                                 │
                                 ▼
                     medi-trend-targeting-result
@@ -142,16 +147,25 @@ curl -X POST http://localhost:8001/crawl/google \
 # 2. 전처리
 curl -X POST http://localhost:8002/preprocess/products
 curl -X POST http://localhost:8002/preprocess/orders
+curl -X POST http://localhost:8002/preprocess/accounts
 
-# 3. 클러스터링
+# 3. 클러스터링 (상품)
 curl -X POST http://localhost:8003/cluster/run \
   -H "Content-Type: application/json" \
   -d '{"algorithm": "hdbscan", "entity_type": "product"}'
+
+# 3-1. 클러스터링 (약국)
+curl -X POST http://localhost:8003/cluster/run \
+  -H "Content-Type: application/json" \
+  -d '{"algorithm": "gmm", "entity_type": "pharmacy", "params": {"n_components": 10}}'
 
 # 4. 수요예측
 curl -X POST http://localhost:8004/forecast/run \
   -H "Content-Type: application/json" \
   -d '{"days_ahead": 30}'
+
+# 4-1. 랭킹 계산
+curl -X POST http://localhost:8004/ranking/run
 
 # 5. 타겟팅
 curl -X POST http://localhost:8005/target/run \

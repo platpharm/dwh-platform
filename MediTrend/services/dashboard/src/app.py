@@ -1,16 +1,16 @@
-"""TipsDips Dashboard - Streamlit 메인 애플리케이션"""
+"""DWH Dashboard - Streamlit 메인 애플리케이션"""
 import streamlit as st
 
 # 페이지 설정
 st.set_page_config(
-    page_title="TipsDips Dashboard",
+    page_title="DWH Dashboard",
     page_icon="",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
 # 사이드바 네비게이션
-st.sidebar.title("TipsDips Dashboard")
+st.sidebar.title("DWH Dashboard")
 st.sidebar.markdown("---")
 
 # 페이지 선택
@@ -27,7 +27,7 @@ page = st.sidebar.radio(
 
 # 페이지 라우팅
 if page == "홈":
-    st.title("TipsDips Analytics Dashboard")
+    st.title("DWH Analytics Dashboard")
     st.markdown("---")
 
     st.markdown("""
@@ -83,4 +83,4 @@ elif page == "상품-약국 매칭":
 
 # 푸터
 st.sidebar.markdown("---")
-st.sidebar.caption("TipsDips Analytics Platform v1.0")
+st.sidebar.caption("DWH Analytics Platform v1.0")

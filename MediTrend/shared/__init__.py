@@ -1,1 +1,1 @@
-# TipsDips Shared Module
+# MediTrend Shared Module

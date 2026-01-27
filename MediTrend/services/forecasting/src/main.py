@@ -16,7 +16,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="TipsDips Forecasting Service",
+    title="MediTrend Forecasting Service",
     description="수요예측 및 인기 의약품 랭킹 서비스",
     version="1.0.0",
     lifespan=lifespan,
