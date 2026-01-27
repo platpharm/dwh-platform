@@ -1,10 +1,11 @@
 """Crawler Service API 엔드포인트"""
 
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, HTTPException, BackgroundTasks
 from pydantic import BaseModel
 
 from shared.clients.es_client import es_client
+from shared.clients.pg_client import pg_client
 from shared.models.schemas import CrawlRequest, CrawlResponse, HealthResponse
 from src.crawlers.google_trends import google_crawler
 from src.crawlers.paper_crawler import create_paper_crawler
@@ -23,6 +24,33 @@ class PaperCrawlRequest(CrawlRequest):
     """논문 크롤링 요청"""
     sources: Optional[List[str]] = None  # ["pubmed", "arxiv"]
     max_results: int = 50                # 소스당 최대 결과 수
+
+
+class ProductTrendRequest(BaseModel):
+    """상품명 기반 트렌드 크롤링 요청"""
+    limit: Optional[int] = 100           # 상품 수 제한 (기본 100개)
+    start_date: Optional[str] = None     # YYYY-MM-DD
+    end_date: Optional[str] = None       # YYYY-MM-DD
+    include_related: bool = True         # 연관 검색어 포함 여부
+
+
+class ProductTrendsCrawlRequest(BaseModel):
+    """상품명 기반 트렌드 크롤링 요청 (CDC ES 사용)"""
+    top_n: int = 100                     # 검색할 상위 상품 수
+    start_date: Optional[str] = None     # YYYY-MM-DD
+    end_date: Optional[str] = None       # YYYY-MM-DD
+    include_related: bool = True         # 연관 검색어 포함 여부
+
+
+class ProductTrendsCrawlResponse(BaseModel):
+    """상품명 기반 트렌드 크롤링 응답"""
+    success: bool
+    trend_count: int
+    mapping_count: int
+    products_processed: int
+    unique_keywords: int
+    category_fallbacks: int
+    message: str
 
 
 @router.get("/health", response_model=HealthResponse)
@@ -102,4 +130,94 @@ async def crawl_papers(request: PaperCrawlRequest):
         raise HTTPException(
             status_code=500,
             detail=f"논문 크롤링 중 오류 발생: {str(e)}",
+        )
+
+
+@router.post("/crawl/product-trends", response_model=ProductTrendsCrawlResponse)
+async def crawl_product_trends(request: ProductTrendsCrawlRequest):
+    """
+    상품명 기반 Google Trends 크롤링 (CDC ES 사용)
+
+    - CDC ES (platpharm.public.product)에서 상품명 조회
+    - 인기 상품 Top N개 선별 (ranking_result 우선, 없으면 전체 상품)
+    - 상품명을 키워드로 Google Trends 데이터를 수집
+    - 검색량이 적은 상품은 카테고리명으로 대체 검색
+    - 수집된 데이터와 상품-키워드 매핑을 Elasticsearch에 저장
+    """
+    try:
+        result = google_crawler.crawl_product_trends_and_save(
+            top_n=request.top_n,
+            start_date=request.start_date,
+            end_date=request.end_date,
+            include_related=request.include_related,
+        )
+
+        return ProductTrendsCrawlResponse(
+            success=result.get("success", False),
+            trend_count=result.get("trend_count", 0),
+            mapping_count=result.get("mapping_count", 0),
+            products_processed=result.get("products_processed", 0),
+            unique_keywords=result.get("unique_keywords", 0),
+            category_fallbacks=result.get("category_fallbacks", 0),
+            message=result.get("message", ""),
+        )
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"상품 트렌드 크롤링 중 오류 발생: {str(e)}",
+        )
+
+
+@router.post("/crawl/product-trends-pg", response_model=CrawlResponse)
+async def crawl_product_trends_pg(request: ProductTrendRequest):
+    """
+    상품명 기반 Google Trends 크롤링 (PostgreSQL 사용 - 레거시)
+
+    - PostgreSQL에서 상품명 목록을 조회
+    - 상품명을 키워드로 Google Trends 데이터를 수집
+    - 수집된 데이터는 Elasticsearch에 저장
+    """
+    try:
+        # PostgreSQL에서 상품명 조회
+        products = pg_client.get_products()
+
+        if not products:
+            return CrawlResponse(
+                success=True,
+                count=0,
+                message="조회된 상품이 없습니다",
+            )
+
+        # 상품명 추출 (limit 적용)
+        product_names = [
+            p['name'] for p in products[:request.limit]
+            if p.get('name') and len(p['name']) >= 2  # 2글자 이상만
+        ]
+
+        if not product_names:
+            return CrawlResponse(
+                success=True,
+                count=0,
+                message="유효한 상품명이 없습니다",
+            )
+
+        # Google Trends 크롤링
+        count = google_crawler.crawl_and_save(
+            keywords=product_names,
+            start_date=request.start_date,
+            end_date=request.end_date,
+            include_related=request.include_related,
+        )
+
+        return CrawlResponse(
+            success=True,
+            count=count,
+            message=f"{len(product_names)}개 상품에 대해 {count}건의 트렌드 데이터를 저장했습니다",
+        )
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"상품 트렌드 크롤링 중 오류 발생: {str(e)}",
         )

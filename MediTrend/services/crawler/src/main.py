@@ -36,11 +36,13 @@ app.include_router(router, prefix="")
 async def root():
     """루트 엔드포인트"""
     return {
-        "service": "TipsDips Crawler Service",
-        "version": "0.1.0",
+        "service": "MediTrend Crawler Service",
+        "version": "0.2.0",
         "endpoints": [
             "/health",
             "/crawl/google",
             "/crawl/papers",
+            "/crawl/product-trends",
+            "/crawl/product-trends-pg",
         ],
     }

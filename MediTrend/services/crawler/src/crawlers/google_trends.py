@@ -1,8 +1,10 @@
 """구글 트렌드 크롤러 (pytrends 사용)"""
 
+import logging
+import re
 import time
 from datetime import datetime, timedelta
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 
 from pytrends.request import TrendReq
 from tenacity import retry, stop_after_attempt, wait_exponential
@@ -10,6 +12,32 @@ from tenacity import retry, stop_after_attempt, wait_exponential
 from shared.clients.es_client import es_client
 from shared.models.schemas import TrendData
 from shared.config import ESIndex
+
+logger = logging.getLogger(__name__)
+
+# 카테고리2 코드 매핑 (상품명 검색량 부족 시 대체 검색용)
+CATEGORY2_MAPPING = {
+    "01": "해열진통소염제",
+    "02": "항히스타민제",
+    "03": "소화기관용제",
+    "04": "비타민제",
+    "05": "호르몬제",
+    "06": "외용제",
+    "07": "안과용제",
+    "08": "이비과용제",
+    "09": "항생물질제제",
+    "10": "항바이러스제",
+    "11": "순환계용제",
+    "12": "호흡기관용제",
+    "13": "비뇨생식기관용제",
+    "14": "중추신경용제",
+    "15": "말초신경용제",
+    "16": "조직세포의기능용제",
+    "17": "대사성의약품",
+    "18": "자양강장변질제",
+    "19": "진단용약",
+    "20": "기타의약품",
+}
 
 
 class GoogleTrendsCrawler:
@@ -203,6 +231,323 @@ class GoogleTrendsCrawler:
         )
 
         return success
+
+    def get_top_products_from_es(
+        self,
+        top_n: int = 100,
+    ) -> List[Dict[str, Any]]:
+        """
+        CDC ES에서 인기 상품 Top N개 조회
+
+        Args:
+            top_n: 가져올 상품 수 (기본값: 100)
+
+        Returns:
+            상품 정보 리스트 [{product_id, product_name, category2, ...}, ...]
+        """
+        logger.info(f"Fetching top {top_n} products from CDC ES")
+
+        try:
+            # CDC Product 인덱스에서 상품 조회
+            # ranking_result 인덱스가 있으면 인기순, 없으면 전체 상품 조회
+            query = {"match_all": {}}
+
+            # 먼저 ranking_result 에서 인기 상품 ID 목록 조회 시도
+            ranking_products = []
+            try:
+                ranking_query = {"match_all": {}}
+                ranking_results = es_client.search(
+                    index=ESIndex.RANKING_RESULT,
+                    query=ranking_query,
+                    size=top_n,
+                    source=["product_id", "product_name", "category2", "popularity_score"]
+                )
+                if ranking_results:
+                    ranking_products = ranking_results
+                    logger.info(f"Found {len(ranking_products)} products from ranking index")
+            except Exception as e:
+                logger.warning(f"Ranking index not available, falling back to CDC product: {e}")
+
+            if ranking_products:
+                return ranking_products
+
+            # Ranking 결과가 없으면 CDC Product 인덱스에서 직접 조회
+            products = es_client.search(
+                index=ESIndex.CDC_PRODUCT,
+                query=query,
+                size=top_n,
+                source=["id", "name", "category2", "efficacy", "ingredient"]
+            )
+
+            # 필드명 정규화
+            result = []
+            for p in products:
+                result.append({
+                    "product_id": p.get("id"),
+                    "product_name": p.get("name"),
+                    "category2": p.get("category2"),
+                    "efficacy": p.get("efficacy"),
+                    "ingredient": p.get("ingredient"),
+                })
+
+            logger.info(f"Fetched {len(result)} products from CDC ES")
+            return result
+
+        except Exception as e:
+            logger.error(f"Failed to fetch products from ES: {e}")
+            return []
+
+    def _normalize_product_name_for_search(self, name: str) -> str:
+        """
+        상품명을 Google Trends 검색에 적합하게 정규화
+
+        Args:
+            name: 원본 상품명
+
+        Returns:
+            정규화된 상품명
+        """
+        if not name:
+            return ""
+
+        # 괄호 내용 제거
+        normalized = re.sub(r"\([^)]*\)", "", name)
+        # 숫자+단위 제거 (예: 100mg, 50ml, 10정)
+        normalized = re.sub(
+            r"\d+\.?\d*\s*(mg|ml|g|L|정|캡슐|포|개|mcg|iu|%)",
+            "",
+            normalized,
+            flags=re.IGNORECASE
+        )
+        # 제형 표기 제거
+        normalized = re.sub(
+            r"(필름코팅정|정제|캡슐|연질캡슐|시럽|액|주사|연고|크림|겔|패치|필름|과립|산제)",
+            "",
+            normalized
+        )
+        # 특수문자 제거
+        normalized = re.sub(r"[^\w\s가-힣]", "", normalized)
+        # 연속 공백 제거
+        normalized = re.sub(r"\s+", " ", normalized).strip()
+
+        return normalized
+
+    def _get_category_name(self, category2: Optional[str]) -> Optional[str]:
+        """카테고리2 코드를 카테고리명으로 변환"""
+        if not category2:
+            return None
+        return CATEGORY2_MAPPING.get(str(category2).zfill(2))
+
+    def fetch_product_trends(
+        self,
+        products: List[Dict[str, Any]],
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+        min_trend_value: float = 5.0,
+    ) -> Tuple[Dict[str, Any], Dict[str, Dict]]:
+        """
+        상품명으로 트렌드 검색, 검색량 부족 시 카테고리명으로 대체
+
+        Args:
+            products: 상품 정보 리스트
+            start_date: 검색 시작일
+            end_date: 검색 종료일
+            min_trend_value: 트렌드 값이 이 값 미만이면 카테고리로 대체 검색
+
+        Returns:
+            (interest_data, product_keyword_mapping)
+            - interest_data: 키워드별 트렌드 데이터
+            - product_keyword_mapping: product_id -> {keyword, is_category_fallback}
+        """
+        logger.info(f"Fetching trends for {len(products)} products")
+
+        # 상품명 정규화 및 키워드 준비
+        product_keywords = {}  # normalized_name -> [product_ids]
+        product_category_map = {}  # product_id -> category_name
+
+        for p in products:
+            product_id = p.get("product_id") or p.get("id")
+            product_name = p.get("product_name") or p.get("name")
+            category2 = p.get("category2")
+
+            if not product_id or not product_name:
+                continue
+
+            normalized = self._normalize_product_name_for_search(product_name)
+            if normalized:
+                if normalized not in product_keywords:
+                    product_keywords[normalized] = []
+                product_keywords[normalized].append(product_id)
+
+            # 카테고리명 저장 (대체 검색용)
+            category_name = self._get_category_name(category2)
+            if category_name:
+                product_category_map[product_id] = category_name
+
+        # 중복 제거된 키워드 목록
+        keywords = list(product_keywords.keys())
+        logger.info(f"Unique keywords to search: {len(keywords)}")
+
+        # 1차: 상품명으로 트렌드 검색
+        interest_data = self.fetch_interest_over_time(
+            keywords=keywords,
+            start_date=start_date,
+            end_date=end_date,
+        )
+
+        # 검색량 낮은 상품 -> 카테고리로 대체 검색
+        product_keyword_mapping = {}  # product_id -> {keyword, is_category_fallback}
+        category_fallback_keywords = set()
+
+        for keyword, product_ids in product_keywords.items():
+            if keyword in interest_data:
+                # 평균 트렌드 값 계산
+                values = list(interest_data[keyword].values())
+                avg_value = sum(values) / len(values) if values else 0
+
+                for pid in product_ids:
+                    if avg_value >= min_trend_value:
+                        # 상품명으로 충분한 트렌드 데이터
+                        product_keyword_mapping[pid] = {
+                            "keyword": keyword,
+                            "is_category_fallback": False,
+                            "avg_trend_value": avg_value,
+                        }
+                    else:
+                        # 트렌드 값이 낮음 -> 카테고리로 대체 필요
+                        category_name = product_category_map.get(pid)
+                        if category_name:
+                            category_fallback_keywords.add(category_name)
+                            product_keyword_mapping[pid] = {
+                                "keyword": category_name,
+                                "is_category_fallback": True,
+                                "original_keyword": keyword,
+                                "avg_trend_value": avg_value,
+                            }
+            else:
+                # 검색 결과 없음 -> 카테고리로 대체
+                for pid in product_ids:
+                    category_name = product_category_map.get(pid)
+                    if category_name:
+                        category_fallback_keywords.add(category_name)
+                        product_keyword_mapping[pid] = {
+                            "keyword": category_name,
+                            "is_category_fallback": True,
+                            "original_keyword": keyword,
+                            "avg_trend_value": 0,
+                        }
+
+        # 2차: 카테고리명으로 추가 검색
+        if category_fallback_keywords:
+            logger.info(f"Fetching category fallback trends for {len(category_fallback_keywords)} categories")
+            category_trends = self.fetch_interest_over_time(
+                keywords=list(category_fallback_keywords),
+                start_date=start_date,
+                end_date=end_date,
+            )
+            interest_data.update(category_trends)
+
+        return interest_data, product_keyword_mapping
+
+    def crawl_product_trends_and_save(
+        self,
+        top_n: int = 100,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+        include_related: bool = True,
+    ) -> Dict[str, Any]:
+        """
+        상품명 기반 트렌드 크롤링 후 ES에 저장
+
+        Args:
+            top_n: 검색할 상위 상품 수
+            start_date: 검색 시작일 (YYYY-MM-DD)
+            end_date: 검색 종료일 (YYYY-MM-DD)
+            include_related: 연관 검색어 포함 여부
+
+        Returns:
+            처리 결과 딕셔너리
+        """
+        logger.info(f"Starting product-based trend crawling for top {top_n} products")
+
+        # 1. CDC ES에서 상품 조회
+        products = self.get_top_products_from_es(top_n=top_n)
+        if not products:
+            logger.warning("No products found in ES")
+            return {
+                "success": False,
+                "trend_count": 0,
+                "mapping_count": 0,
+                "message": "No products found in ES",
+            }
+
+        # 2. 상품명 기반 트렌드 검색
+        interest_data, product_keyword_mapping = self.fetch_product_trends(
+            products=products,
+            start_date=start_date,
+            end_date=end_date,
+        )
+
+        # 3. 연관 검색어 조회
+        related_data = None
+        if include_related and interest_data:
+            all_keywords = list(interest_data.keys())
+            related_data = self.fetch_related_queries(all_keywords)
+
+        # 4. TrendData 변환 및 저장
+        trend_data_list = self._parse_trend_data(interest_data, related_data)
+        trend_count = 0
+        if trend_data_list:
+            documents = [
+                {
+                    **data.model_dump(),
+                    "date": data.date.isoformat(),
+                }
+                for data in trend_data_list
+            ]
+            trend_count, _ = es_client.bulk_index(
+                index=ESIndex.TREND_DATA,
+                documents=documents,
+            )
+
+        # 5. 상품-키워드 매핑 저장
+        mapping_documents = []
+        for product_id, mapping_info in product_keyword_mapping.items():
+            # 상품 정보 찾기
+            product_info = next(
+                (p for p in products if (p.get("product_id") or p.get("id")) == product_id),
+                {}
+            )
+            mapping_documents.append({
+                "product_id": product_id,
+                "product_name": product_info.get("product_name") or product_info.get("name"),
+                "keyword": mapping_info["keyword"],
+                "keyword_source": "category" if mapping_info["is_category_fallback"] else "product_name",
+                "is_category_fallback": mapping_info["is_category_fallback"],
+                "original_keyword": mapping_info.get("original_keyword"),
+                "avg_trend_value": mapping_info.get("avg_trend_value", 0),
+                "timestamp": datetime.now().isoformat(),
+            })
+
+        mapping_count = 0
+        if mapping_documents:
+            mapping_count, _ = es_client.bulk_index(
+                index=ESIndex.TREND_PRODUCT_MAPPING,
+                documents=mapping_documents,
+                id_field="product_id",
+            )
+
+        logger.info(f"Saved {trend_count} trend records and {mapping_count} mappings")
+
+        return {
+            "success": True,
+            "trend_count": trend_count,
+            "mapping_count": mapping_count,
+            "products_processed": len(products),
+            "unique_keywords": len(interest_data),
+            "category_fallbacks": sum(1 for m in product_keyword_mapping.values() if m["is_category_fallback"]),
+            "message": f"상품명 기반 트렌드 {trend_count}건, 매핑 {mapping_count}건 저장 완료",
+        }
 
 
 # 싱글톤 인스턴스
