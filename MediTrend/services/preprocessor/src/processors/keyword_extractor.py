@@ -2,9 +2,8 @@
 import logging
 import re
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional, Tuple
 
-from shared.clients.pg_client import pg_client
 from shared.clients.es_client import es_client
 from shared.config import ESIndex
 from shared.models.schemas import TrendProductMapping
@@ -46,10 +45,9 @@ STOPWORDS = {
 
 
 class KeywordExtractor:
-    """키워드 추출 및 트렌드 매핑 클래스"""
+    """키워드 추출 및 트렌드 매핑 클래스 (CDC ES 데이터 사용)"""
 
     def __init__(self):
-        self.pg = pg_client
         self.es = es_client
 
     def extract_keywords(self, product: Dict[str, Any]) -> Dict[str, List[str]]:
@@ -185,6 +183,70 @@ class KeywordExtractor:
             logger.warning(f"Failed to get trend data: {str(e)}")
             return []
 
+    def get_trend_score_for_product(self, product_name: str, days: int = 30) -> Tuple[float, bool]:
+        """
+        상품명으로 직접 트렌드 데이터를 조회하고 평균 트렌드 스코어 계산
+
+        Args:
+            product_name: 상품명
+            days: 조회할 일수 (기본 30일)
+
+        Returns:
+            (trend_score, is_direct_match): 트렌드 스코어와 직접 매칭 여부
+        """
+        try:
+            # 상품명 정규화 (괄호 및 용량 제거)
+            normalized_name = self._normalize_product_name_for_trend(product_name)
+
+            # 상품명으로 직접 트렌드 데이터 검색 (exact match)
+            query = {
+                "bool": {
+                    "should": [
+                        {"term": {"keyword": product_name}},
+                        {"term": {"keyword": normalized_name}},
+                        {"match_phrase": {"keyword": normalized_name}}
+                    ],
+                    "minimum_should_match": 1
+                }
+            }
+
+            trend_data = self.es.search(
+                index=ESIndex.TREND_DATA,
+                query=query,
+                size=days
+            )
+
+            if trend_data:
+                # 트렌드 값 평균 계산
+                values = [d.get("value", 0) for d in trend_data if d.get("value")]
+                if values:
+                    trend_score = sum(values) / len(values)
+                    logger.debug(f"Direct trend match for '{product_name}': {trend_score:.2f} (from {len(values)} records)")
+                    return trend_score, True
+
+            return 0.0, False
+
+        except Exception as e:
+            logger.warning(f"Failed to get trend score for product '{product_name}': {str(e)}")
+            return 0.0, False
+
+    def _normalize_product_name_for_trend(self, name: str) -> str:
+        """트렌드 검색용 상품명 정규화"""
+        if not name:
+            return ""
+
+        # 괄호 내용 제거
+        normalized = re.sub(r"\([^)]*\)", "", name)
+        # 숫자+단위 제거 (예: 100mg, 50ml)
+        normalized = re.sub(r"\d+\.?\d*\s*(mg|ml|g|mcg|iu|정|캡슐|포|개|%)", "", normalized, flags=re.IGNORECASE)
+        # 제형 관련 단어 제거
+        for word in ["정", "캡슐", "시럽", "액", "정제", "연질캡슐", "경질캡슐", "필름코팅정", "서방정", "장용정"]:
+            normalized = normalized.replace(word, "")
+        # 연속 공백 제거
+        normalized = re.sub(r"\s+", " ", normalized).strip()
+
+        return normalized
+
     def match_trend_with_product(
         self,
         trend_keyword: str,
@@ -255,9 +317,46 @@ class KeywordExtractor:
 
         return 0.0
 
+    def _get_products_from_cdc(self) -> List[Dict[str, Any]]:
+        """CDC ES에서 상품 데이터 조회"""
+        logger.info("Fetching products from CDC ES...")
+
+        query = {
+            "bool": {
+                "must_not": [
+                    {"exists": {"field": "deleted_at"}}
+                ]
+            }
+        }
+
+        results = []
+        for doc in self.es.scroll_search(
+            index=ESIndex.CDC_PRODUCT,
+            query=query,
+            size=1000
+        ):
+            # Transform CDC fields to expected format
+            results.append({
+                "id": doc.get("id"),
+                "name": doc.get("name", ""),
+                "efficacy": doc.get("efficacy") or doc.get("main_efficacy", ""),
+                "ingredient": doc.get("ingredient") or doc.get("main_ingredient", ""),
+                "category2": doc.get("category2", ""),
+                "std": doc.get("std", ""),
+                "thumb_img1": doc.get("thumb_img1", ""),
+                "vendor_id": doc.get("vendor_id"),
+            })
+
+        logger.info(f"Fetched {len(results)} products from CDC ES")
+        return results
+
     def process(self) -> Dict[str, Any]:
         """
         키워드 추출 및 트렌드 매핑 실행
+
+        수정된 로직:
+        1. 상품명으로 직접 트렌드 데이터 검색 (우선)
+        2. 직접 매칭 실패 시 키워드 기반 간접 매칭 (fallback)
 
         Returns:
             처리 결과 딕셔너리
@@ -266,8 +365,8 @@ class KeywordExtractor:
         start_time = datetime.now()
 
         try:
-            # 상품 데이터 조회
-            products = self.pg.get_products()
+            # 상품 데이터 조회 (CDC ES에서)
+            products = self._get_products_from_cdc()
             if not products:
                 return {
                     "success": True,
@@ -275,9 +374,11 @@ class KeywordExtractor:
                     "message": "No product data to process"
                 }
 
-            # 트렌드 데이터 조회
+            logger.info(f"Processing {len(products)} products for trend mapping")
+
+            # 트렌드 데이터 조회 (fallback용)
             trend_data = self.get_trend_data()
-            logger.info(f"Loaded {len(trend_data)} trend keywords")
+            logger.info(f"Loaded {len(trend_data)} trend keywords for fallback matching")
 
             # 상품별 키워드 추출
             product_keywords_map = {}
@@ -288,24 +389,60 @@ class KeywordExtractor:
                     "keywords": keywords
                 }
 
-            # 트렌드-상품 매핑
+            # 트렌드-상품 매핑 (새로운 로직)
             mappings = []
-            for trend in trend_data:
-                trend_keyword = trend.get("keyword", "")
-                trend_score = trend.get("score", 0.0)
+            direct_match_count = 0
+            fallback_match_count = 0
 
-                if not trend_keyword:
+            for product in products:
+                product_id = product["id"]
+                product_name = product.get("name", "")
+
+                if not product_name:
                     continue
 
-                for product_id, data in product_keywords_map.items():
-                    mapping = self.match_trend_with_product(
-                        trend_keyword,
-                        trend_score,
-                        data["product"],
-                        data["keywords"]
+                # 1. 상품명으로 직접 트렌드 데이터 검색 (우선)
+                trend_score, is_direct_match = self.get_trend_score_for_product(product_name)
+
+                if is_direct_match and trend_score > 0:
+                    # 직접 매칭 성공
+                    mapping = TrendProductMapping(
+                        product_id=product_id,
+                        product_name=product_name,
+                        keyword=product_name,  # 직접 매칭이므로 상품명이 키워드
+                        keyword_source="direct_match",
+                        match_score=1.0,  # 직접 매칭이므로 1.0
+                        trend_score=trend_score,
+                        timestamp=datetime.now()
                     )
-                    if mapping:
-                        mappings.append(mapping.model_dump())
+                    mappings.append(mapping.model_dump())
+                    direct_match_count += 1
+                else:
+                    # 2. 직접 매칭 실패 시 키워드 기반 간접 매칭 (fallback)
+                    best_mapping = None
+                    best_trend_score = 0.0
+
+                    for trend in trend_data:
+                        trend_keyword = trend.get("keyword", "")
+                        trend_score_from_data = trend.get("score", 0.0) or trend.get("value", 0.0)
+
+                        if not trend_keyword:
+                            continue
+
+                        mapping = self.match_trend_with_product(
+                            trend_keyword,
+                            trend_score_from_data,
+                            product,
+                            product_keywords_map[product_id]["keywords"]
+                        )
+
+                        if mapping and mapping.trend_score > best_trend_score:
+                            best_mapping = mapping
+                            best_trend_score = mapping.trend_score
+
+                    if best_mapping:
+                        mappings.append(best_mapping.model_dump())
+                        fallback_match_count += 1
 
             # ES에 매핑 결과 저장
             if mappings:
@@ -322,7 +459,8 @@ class KeywordExtractor:
 
             logger.info(
                 f"Keyword extraction completed: {len(products)} products, "
-                f"{len(mappings)} mappings in {elapsed:.2f}s"
+                f"{len(mappings)} mappings ({direct_match_count} direct, {fallback_match_count} fallback) "
+                f"in {elapsed:.2f}s"
             )
 
             return {
@@ -330,6 +468,8 @@ class KeywordExtractor:
                 "product_count": len(products),
                 "trend_count": len(trend_data),
                 "mapping_count": len(mappings),
+                "direct_match_count": direct_match_count,
+                "fallback_match_count": fallback_match_count,
                 "indexed_count": success_count,
                 "elapsed_seconds": elapsed,
                 "message": "Keyword extraction and trend mapping completed successfully"
@@ -345,14 +485,14 @@ class KeywordExtractor:
 
     def extract_all_keywords(self) -> Dict[str, Any]:
         """
-        모든 상품에서 키워드 추출 (매핑 없이)
+        모든 상품에서 키워드 추출 (매핑 없이) - CDC ES 사용
 
         Returns:
             추출된 키워드 통계
         """
-        logger.info("Extracting keywords from all products")
+        logger.info("Extracting keywords from all products (CDC ES)")
 
-        products = self.pg.get_products()
+        products = self._get_products_from_cdc()
         if not products:
             return {
                 "success": True,

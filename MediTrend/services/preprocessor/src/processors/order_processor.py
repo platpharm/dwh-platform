@@ -1,11 +1,11 @@
 """PP주문데이터 전처리 프로세서"""
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
+from collections import defaultdict
 
 import pandas as pd
 
-from shared.clients.pg_client import pg_client
 from shared.clients.es_client import es_client
 from shared.config import ESIndex
 
@@ -13,15 +13,80 @@ logger = logging.getLogger(__name__)
 
 
 class OrderProcessor:
-    """주문 데이터 전처리 클래스"""
+    """주문 데이터 전처리 클래스 (CDC ES 데이터 사용)"""
 
     def __init__(self):
-        self.pg = pg_client
         self.es = es_client
+
+    def _get_orders_detail_from_cdc(self, limit: Optional[int] = None) -> List[Dict[str, Any]]:
+        """CDC ES에서 주문 상세 데이터 조회 (약국 role: cu, bh만 포함)"""
+        logger.info("Fetching orders detail from CDC ES...")
+
+        # 먼저 약국 account_id 목록 조회
+        pharmacy_ids = self._get_pharmacy_ids_from_cdc()
+
+        query = {
+            "bool": {
+                "must": [
+                    {"terms": {"account_id": list(pharmacy_ids)}}
+                ],
+                "must_not": [
+                    {"exists": {"field": "deleted_at"}}
+                ]
+            }
+        }
+
+        results = []
+        count = 0
+        for doc in self.es.scroll_search(
+            index=ESIndex.CDC_ORDERS_DETAIL,
+            query=query,
+            size=1000
+        ):
+            results.append({
+                "id": doc.get("id"),
+                "order_id": doc.get("order_id"),
+                "product_id": doc.get("product_id"),
+                "order_qty": doc.get("order_qty", 0),
+                "order_price": doc.get("order_price", 0),
+                "account_id": doc.get("account_id"),
+                "ordered_at": doc.get("created_at"),
+            })
+            count += 1
+            if limit and count >= limit:
+                break
+
+        logger.info(f"Fetched {len(results)} orders detail from CDC ES")
+        return results
+
+    def _get_pharmacy_ids_from_cdc(self) -> set:
+        """CDC ES에서 약국 ID 목록 조회 (role: CU, BH)"""
+        query = {
+            "bool": {
+                "must": [
+                    {"terms": {"role": ["CU", "BH"]}}
+                ],
+                "must_not": [
+                    {"exists": {"field": "deleted_at"}}
+                ]
+            }
+        }
+
+        pharmacy_ids = set()
+        for doc in self.es.scroll_search(
+            index=ESIndex.CDC_ACCOUNT,
+            query=query,
+            size=1000
+        ):
+            if doc.get("id"):
+                pharmacy_ids.add(doc["id"])
+
+        logger.info(f"Found {len(pharmacy_ids)} pharmacy IDs from CDC ES")
+        return pharmacy_ids
 
     def process(self, limit: Optional[int] = None) -> Dict[str, Any]:
         """
-        주문 데이터 전처리 실행
+        주문 데이터 전처리 실행 (CDC ES 데이터 사용)
 
         Args:
             limit: 처리할 최대 레코드 수 (None이면 전체)
@@ -29,12 +94,12 @@ class OrderProcessor:
         Returns:
             처리 결과 딕셔너리
         """
-        logger.info("Starting order data preprocessing")
+        logger.info("Starting order data preprocessing from CDC ES")
         start_time = datetime.now()
 
         try:
-            # 주문 상세 데이터 조회
-            orders_detail = self.pg.get_orders_detail(limit=limit)
+            # CDC ES에서 주문 상세 데이터 조회
+            orders_detail = self._get_orders_detail_from_cdc(limit=limit)
 
             if not orders_detail:
                 logger.warning("No order data found")
@@ -207,42 +272,183 @@ class OrderProcessor:
         return total_indexed
 
     def get_product_sales_summary(self) -> List[Dict[str, Any]]:
-        """상품별 판매 요약 조회"""
-        query = """
-            SELECT
-                od.product_id,
-                p.name as product_name,
-                COUNT(DISTINCT od.order_id) as order_count,
-                COUNT(DISTINCT o.account_id) as pharmacy_count,
-                SUM(od.order_qty) as total_qty,
-                SUM(od.order_qty * od.order_price) as total_amount
-            FROM orders_detail od
-            JOIN orders o ON od.order_id = o.id
-            JOIN product p ON od.product_id = p.id
-            WHERE od.deleted_at IS NULL
-            GROUP BY od.product_id, p.name
-            ORDER BY total_qty DESC
-        """
-        return self.pg.fetch_all(query)
+        """상품별 판매 요약 조회 (약국 role: cu, bh만 포함) - CDC ES 사용"""
+        logger.info("Calculating product sales summary from CDC ES...")
+
+        # 약국 ID 목록 조회
+        pharmacy_ids = self._get_pharmacy_ids_from_cdc()
+
+        # 상품명 매핑 조회
+        product_names = self._get_product_names_from_cdc()
+
+        # 주문 데이터 집계
+        product_stats: Dict[str, Dict] = defaultdict(lambda: {
+            "product_id": None,
+            "product_name": "",
+            "order_ids": set(),
+            "pharmacy_ids": set(),
+            "total_qty": 0,
+            "total_amount": 0
+        })
+
+        query = {
+            "bool": {
+                "must": [
+                    {"terms": {"account_id": list(pharmacy_ids)}}
+                ],
+                "must_not": [
+                    {"exists": {"field": "deleted_at"}}
+                ]
+            }
+        }
+
+        for doc in self.es.scroll_search(
+            index=ESIndex.CDC_ORDERS_DETAIL,
+            query=query,
+            size=1000
+        ):
+            product_id = doc.get("product_id")
+            if not product_id:
+                continue
+
+            stats = product_stats[product_id]
+            stats["product_id"] = product_id
+            stats["product_name"] = product_names.get(product_id, "")
+            if doc.get("order_id"):
+                stats["order_ids"].add(doc["order_id"])
+            if doc.get("account_id"):
+                stats["pharmacy_ids"].add(doc["account_id"])
+            stats["total_qty"] += doc.get("order_qty", 0) or 0
+            stats["total_amount"] += (doc.get("order_qty", 0) or 0) * (doc.get("order_price", 0) or 0)
+
+        # 결과 변환
+        results = []
+        for product_id, stats in product_stats.items():
+            results.append({
+                "product_id": stats["product_id"],
+                "product_name": stats["product_name"],
+                "order_count": len(stats["order_ids"]),
+                "pharmacy_count": len(stats["pharmacy_ids"]),
+                "total_qty": stats["total_qty"],
+                "total_amount": stats["total_amount"]
+            })
+
+        # total_qty 기준 내림차순 정렬
+        results.sort(key=lambda x: x["total_qty"], reverse=True)
+
+        logger.info(f"Calculated sales summary for {len(results)} products")
+        return results
+
+    def _get_product_names_from_cdc(self) -> Dict[str, str]:
+        """CDC ES에서 상품 ID -> 이름 매핑 조회"""
+        query = {
+            "bool": {
+                "must_not": [
+                    {"exists": {"field": "deleted_at"}}
+                ]
+            }
+        }
+
+        product_names = {}
+        for doc in self.es.scroll_search(
+            index=ESIndex.CDC_PRODUCT,
+            query=query,
+            size=1000
+        ):
+            if doc.get("id"):
+                product_names[doc["id"]] = doc.get("name", "")
+
+        return product_names
+
+    def _get_account_names_from_cdc(self, pharmacy_ids: set) -> Dict[str, str]:
+        """CDC ES에서 약국 ID -> 이름 매핑 조회"""
+        query = {
+            "bool": {
+                "must": [
+                    {"terms": {"role": ["CU", "BH"]}}
+                ],
+                "must_not": [
+                    {"exists": {"field": "deleted_at"}}
+                ]
+            }
+        }
+
+        account_names = {}
+        for doc in self.es.scroll_search(
+            index=ESIndex.CDC_ACCOUNT,
+            query=query,
+            size=1000
+        ):
+            if doc.get("id"):
+                account_names[doc["id"]] = doc.get("host_name") or doc.get("name", "")
+
+        return account_names
 
     def get_pharmacy_purchase_summary(self) -> List[Dict[str, Any]]:
-        """약국별 구매 요약 조회"""
-        query = """
-            SELECT
-                o.account_id,
-                a.name as pharmacy_name,
-                COUNT(DISTINCT o.id) as order_count,
-                COUNT(DISTINCT od.product_id) as product_count,
-                SUM(od.order_qty) as total_qty,
-                SUM(od.order_qty * od.order_price) as total_amount
-            FROM orders o
-            JOIN orders_detail od ON o.id = od.order_id
-            JOIN account a ON o.account_id = a.id
-            WHERE od.deleted_at IS NULL
-            GROUP BY o.account_id, a.name
-            ORDER BY total_amount DESC
-        """
-        return self.pg.fetch_all(query)
+        """약국별 구매 요약 조회 (약국 role: cu, bh만 포함) - CDC ES 사용"""
+        logger.info("Calculating pharmacy purchase summary from CDC ES...")
+
+        # 약국 ID 목록 및 이름 조회
+        pharmacy_ids = self._get_pharmacy_ids_from_cdc()
+        account_names = self._get_account_names_from_cdc(pharmacy_ids)
+
+        # 약국별 주문 데이터 집계
+        pharmacy_stats: Dict[str, Dict] = defaultdict(lambda: {
+            "account_id": None,
+            "pharmacy_name": "",
+            "order_ids": set(),
+            "product_ids": set(),
+            "total_qty": 0,
+            "total_amount": 0
+        })
+
+        query = {
+            "bool": {
+                "must": [
+                    {"terms": {"account_id": list(pharmacy_ids)}}
+                ],
+                "must_not": [
+                    {"exists": {"field": "deleted_at"}}
+                ]
+            }
+        }
+
+        for doc in self.es.scroll_search(
+            index=ESIndex.CDC_ORDERS_DETAIL,
+            query=query,
+            size=1000
+        ):
+            account_id = doc.get("account_id")
+            if not account_id:
+                continue
+
+            stats = pharmacy_stats[account_id]
+            stats["account_id"] = account_id
+            stats["pharmacy_name"] = account_names.get(account_id, "")
+            if doc.get("order_id"):
+                stats["order_ids"].add(doc["order_id"])
+            if doc.get("product_id"):
+                stats["product_ids"].add(doc["product_id"])
+            stats["total_qty"] += doc.get("order_qty", 0) or 0
+            stats["total_amount"] += (doc.get("order_qty", 0) or 0) * (doc.get("order_price", 0) or 0)
+
+        # 결과 변환
+        results = []
+        for account_id, stats in pharmacy_stats.items():
+            results.append({
+                "account_id": stats["account_id"],
+                "pharmacy_name": stats["pharmacy_name"],
+                "order_count": len(stats["order_ids"]),
+                "product_count": len(stats["product_ids"]),
+                "total_qty": stats["total_qty"],
+                "total_amount": stats["total_amount"]
+            })
+
+        # total_amount 기준 내림차순 정렬
+        results.sort(key=lambda x: x["total_amount"], reverse=True)
+
+        logger.info(f"Calculated purchase summary for {len(results)} pharmacies")
+        return results
 
 
 # 싱글톤 인스턴스
