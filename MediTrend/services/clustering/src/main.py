@@ -97,7 +97,7 @@ async def lifespan(app: FastAPI):
 
 # FastAPI 앱 생성
 app = FastAPI(
-    title="MediTrend Clustering Service",
+    title="MediDB Clustering Service",
     description="상품 및 약국 클러스터링 서비스 (HDBSCAN, K-Prototype, GMM, Mini-Batch K-Means)",
     version="0.1.0",
     lifespan=lifespan
@@ -120,7 +120,7 @@ app.include_router(router, tags=["clustering"])
 async def root():
     """서비스 정보"""
     return {
-        "service": "MediTrend Clustering Service",
+        "service": "MediDB Clustering Service",
         "version": "0.1.0",
         "algorithms": ["hdbscan", "k_prototype", "gmm", "minibatch_kmeans"],
         "entity_types": ["product", "pharmacy"],

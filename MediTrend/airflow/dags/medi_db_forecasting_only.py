@@ -1,5 +1,5 @@
 """
-MediTrend 수요예측 전용 DAG
+MediDB 수요예측 전용 DAG
 수동 실행용: 수요예측 및 랭킹 계산 독립 실행
 """
 from datetime import datetime, timedelta
@@ -9,7 +9,7 @@ from airflow.operators.python import BranchPythonOperator
 import json
 
 default_args = {
-    'owner': 'meditrend',
+    'owner': 'medi_db',
     'depends_on_past': False,
     'email_on_failure': False,
     'email_on_retry': False,
@@ -18,13 +18,13 @@ default_args = {
 }
 
 with DAG(
-    'meditrend_forecasting_only',
+    'medi_db_forecasting_only',
     default_args=default_args,
-    description='MediTrend 수요예측 단독 실행',
+    description='MediDB 수요예측 단독 실행',
     schedule_interval=None,  # 수동 실행
     start_date=datetime(2025, 1, 1),
     catchup=False,
-    tags=['meditrend', 'forecasting'],
+    tags=['medi-db', 'forecasting'],
     params={
         'days_ahead': 30,
         'calculate_ranking': True,

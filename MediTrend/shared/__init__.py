@@ -1,1 +1,1 @@
-# MediTrend Shared Module
+# MediDB Shared Module

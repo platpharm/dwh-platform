@@ -188,7 +188,7 @@ def render_page():
 
     if not products:
         st.warning("타겟팅 결과가 없습니다. 타겟팅 파이프라인을 먼저 실행해주세요.")
-        st.info("Airflow DAG `meditrend_main_pipeline`을 실행하거나, Targeting 서비스를 수동으로 호출하세요.")
+        st.info("Airflow DAG `medi_db_main_pipeline`을 실행하거나, Targeting 서비스를 수동으로 호출하세요.")
         return
 
     # 상품 선택 드롭다운

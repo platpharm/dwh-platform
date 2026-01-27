@@ -33,21 +33,21 @@ class ESIndex:
     CDC_ACCOUNT = "platpharm.public.account"
 
     # Raw data
-    TREND_RAW = "medi-trend-raw"
-    TREND_DATA = "medi-trend-trend-data"
+    TREND_RAW = "medi-db-raw"
+    TREND_DATA = "medi-db-trend-data"
 
     # Preprocessed data
-    PREPROCESSED_ORDER = "medi-trend-preprocessed-order"
-    PREPROCESSED_PRODUCT = "medi-trend-preprocessed-product"
-    PREPROCESSED_PHARMACY = "medi-trend-preprocessed-pharmacy"
+    PREPROCESSED_ORDER = "medi-db-preprocessed-order"
+    PREPROCESSED_PRODUCT = "medi-db-preprocessed-product"
+    PREPROCESSED_PHARMACY = "medi-db-preprocessed-pharmacy"
 
     # Mapping and results
-    TREND_PRODUCT_MAPPING = "medi-trend-product-mapping"
-    CLUSTERING_RESULT = "medi-trend-clustering-result"
-    FORECASTING_RESULT = "medi-trend-forecasting-result"
-    RANKING_RESULT = "medi-trend-ranking-result"
-    TARGETING_RESULT = "medi-trend-targeting-result"
-    VECTOR_STORE = "medi-trend-vectors"
+    TREND_PRODUCT_MAPPING = "medi-db-product-mapping"
+    CLUSTERING_RESULT = "medi-db-clustering-result"
+    FORECASTING_RESULT = "medi-db-forecasting-result"
+    RANKING_RESULT = "medi-db-ranking-result"
+    TARGETING_RESULT = "medi-db-targeting-result"
+    VECTOR_STORE = "medi-db-vectors"
 
 
 # 싱글톤 설정 인스턴스

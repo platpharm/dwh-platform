@@ -1,5 +1,5 @@
 """
-MediTrend 메인 파이프라인 DAG
+MediDB 메인 파이프라인 DAG
 일일 실행: 상품 트렌드 크롤링 → 전처리 → 클러스터링(병렬) → 랭킹 → 타겟팅
 
 파이프라인 순서:
@@ -17,7 +17,7 @@ from airflow.utils.task_group import TaskGroup
 import json
 
 default_args = {
-    'owner': 'meditrend',
+    'owner': 'medi_db',
     'depends_on_past': False,
     'email_on_failure': False,
     'email_on_retry': False,
@@ -35,13 +35,13 @@ def log_task_result(**context):
 
 
 with DAG(
-    'meditrend_main_pipeline',
+    'medi_db_main_pipeline',
     default_args=default_args,
-    description='MediTrend 메인 데이터 파이프라인',
+    description='MediDB 메인 데이터 파이프라인',
     schedule_interval='0 2 * * *',  # 매일 새벽 2시
     start_date=datetime(2025, 1, 1),
     catchup=False,
-    tags=['meditrend', 'main'],
+    tags=['medi-db', 'main'],
 ) as dag:
 
     # ============================================================

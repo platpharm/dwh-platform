@@ -1,5 +1,5 @@
 """
-MediTrend 클러스터링 전용 DAG
+MediDB 클러스터링 전용 DAG
 수동 실행용: 클러스터링 알고리즘만 독립 실행
 """
 from datetime import datetime, timedelta
@@ -9,7 +9,7 @@ from airflow.utils.task_group import TaskGroup
 import json
 
 default_args = {
-    'owner': 'meditrend',
+    'owner': 'medi_db',
     'depends_on_past': False,
     'email_on_failure': False,
     'email_on_retry': False,
@@ -18,13 +18,13 @@ default_args = {
 }
 
 with DAG(
-    'meditrend_clustering_only',
+    'medi_db_clustering_only',
     default_args=default_args,
-    description='MediTrend 클러스터링 단독 실행',
+    description='MediDB 클러스터링 단독 실행',
     schedule_interval=None,  # 수동 실행
     start_date=datetime(2025, 1, 1),
     catchup=False,
-    tags=['meditrend', 'clustering'],
+    tags=['medi-db', 'clustering'],
 ) as dag:
 
     # ============================================================

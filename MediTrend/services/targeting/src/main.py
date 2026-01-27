@@ -1,4 +1,4 @@
-"""MediTrend Targeting Service - FastAPI 엔트리포인트"""
+"""MediDB Targeting Service - FastAPI 엔트리포인트"""
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -7,7 +7,7 @@ from src.api.endpoints import router
 from shared.clients.es_client import es_client
 
 app = FastAPI(
-    title="MediTrend Targeting Service",
+    title="MediDB Targeting Service",
     description="의약품-약국 타겟팅 매칭 서비스",
     version="0.1.0",
 )

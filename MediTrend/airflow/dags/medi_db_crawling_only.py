@@ -1,5 +1,5 @@
 """
-MediTrend 크롤링 전용 DAG
+MediDB 크롤링 전용 DAG
 수동/스케줄 실행: 트렌드 데이터 크롤링
 """
 from datetime import datetime, timedelta
@@ -9,7 +9,7 @@ from airflow.utils.task_group import TaskGroup
 import json
 
 default_args = {
-    'owner': 'meditrend',
+    'owner': 'medi_db',
     'depends_on_past': False,
     'email_on_failure': False,
     'email_on_retry': False,
@@ -33,13 +33,13 @@ PAPER_KEYWORDS = [
 ]
 
 with DAG(
-    'meditrend_crawling_only',
+    'medi_db_crawling_only',
     default_args=default_args,
-    description='MediTrend 트렌드 크롤링',
+    description='MediDB 트렌드 크롤링',
     schedule_interval='0 6 * * *',  # 매일 오전 6시
     start_date=datetime(2025, 1, 1),
     catchup=False,
-    tags=['meditrend', 'crawling'],
+    tags=['medi-db', 'crawling'],
 ) as dag:
 
     # ============================================================
