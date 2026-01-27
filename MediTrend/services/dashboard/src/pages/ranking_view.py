@@ -222,23 +222,13 @@ def render_page():
         if data:
             df = pd.DataFrame(data)
 
-            # 필수 컬럼 확인 및 기본값 설정
+            # 필수 컬럼 확인
             required_cols = ["product_id", "product_name"]
             missing_cols = [col for col in required_cols if col not in df.columns]
 
             if missing_cols:
-                st.warning(f"누락된 필드: {missing_cols}. 샘플 데이터로 시각화합니다.")
-                # 샘플 데이터 생성
-                import numpy as np
-                n_samples = 50
-                categories_sample = ["진통제", "소화제", "감기약", "비타민", "피부약"]
-                df = pd.DataFrame({
-                    "product_id": [f"PROD_{i:03d}" for i in range(n_samples)],
-                    "product_name": [f"의약품 {i+1}" for i in range(n_samples)],
-                    "category": np.random.choice(categories_sample, n_samples),
-                    "sales_score": np.random.uniform(50, 100, n_samples),
-                    "trend_score": np.random.uniform(30, 100, n_samples),
-                })
+                st.error(f"필수 필드 누락: {missing_cols}. 랭킹 파이프라인을 먼저 실행해주세요.")
+                st.stop()
 
             # 랭킹 계산
             df = create_ranking_table(df)

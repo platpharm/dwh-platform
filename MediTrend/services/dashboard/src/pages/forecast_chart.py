@@ -193,28 +193,13 @@ def render_page():
         if data:
             df = pd.DataFrame(data)
 
-            # 필수 컬럼 확인 및 기본값 설정
+            # 필수 컬럼 확인
             required_cols = ["date", "forecast"]
             missing_cols = [col for col in required_cols if col not in df.columns]
 
             if missing_cols:
-                st.warning(f"누락된 필드: {missing_cols}. 샘플 데이터로 시각화합니다.")
-                # 샘플 데이터 생성
-                import numpy as np
-                dates = pd.date_range(end=datetime.now(), periods=30, freq="D")
-                base = 100
-                trend = np.linspace(0, 20, 30)
-                noise = np.random.randn(30) * 10
-
-                df = pd.DataFrame({
-                    "date": dates,
-                    "actual": base + trend + noise,
-                    "forecast": base + trend + np.random.randn(30) * 5,
-                    "upper_bound": base + trend + 20,
-                    "lower_bound": base + trend - 20,
-                    "product_id": "SAMPLE_001",
-                    "product_name": "샘플 상품",
-                })
+                st.error(f"필수 필드 누락: {missing_cols}. 수요예측 파이프라인을 먼저 실행해주세요.")
+                st.stop()
 
             # 날짜 정렬
             if "date" in df.columns:

@@ -117,23 +117,38 @@ def render_page():
         if data:
             df = pd.DataFrame(data)
 
-            # 필수 컬럼 확인 및 기본값 설정
-            required_cols = ["umap_x", "umap_y", "cluster_id", "entity_id"]
+            # 필수 컬럼 확인
+            required_cols = ["cluster_id", "entity_id", "entity_type"]
             missing_cols = [col for col in required_cols if col not in df.columns]
 
             if missing_cols:
-                st.warning(f"누락된 필드: {missing_cols}. 샘플 데이터로 시각화합니다.")
-                # 샘플 데이터 생성
-                import numpy as np
-                n_samples = len(df) if len(df) > 0 else 100
-                df = pd.DataFrame({
-                    "umap_x": np.random.randn(n_samples),
-                    "umap_y": np.random.randn(n_samples),
-                    "cluster_id": np.random.randint(0, 5, n_samples),
-                    "entity_id": [f"entity_{i}" for i in range(n_samples)],
-                    "entity_name": [f"항목 {i}" for i in range(n_samples)],
-                    "entity_type": np.random.choice(["product", "pharmacy"], n_samples),
-                })
+                st.error(f"필수 필드 누락: {missing_cols}. 클러스터링 파이프라인을 먼저 실행해주세요.")
+                st.stop()
+
+            # UMAP 좌표 추출 (umap_coords 필드에서)
+            if "umap_coords" in df.columns:
+                df["umap_x"] = df["umap_coords"].apply(lambda x: x[0] if x and len(x) > 0 else 0)
+                df["umap_y"] = df["umap_coords"].apply(lambda x: x[1] if x and len(x) > 1 else 0)
+            elif "umap_x" not in df.columns or "umap_y" not in df.columns:
+                st.warning("UMAP 좌표가 없습니다. use_umap=True로 클러스터링을 다시 실행해주세요.")
+                df["umap_x"] = 0
+                df["umap_y"] = 0
+
+            # entity_name 필드 확인 - 없으면 에러
+            if "entity_name" not in df.columns:
+                if "features" in df.columns:
+                    df["entity_name"] = df["features"].apply(
+                        lambda x: x.get("product_name") or x.get("name") or x.get("host_name") if isinstance(x, dict) else None
+                    )
+                else:
+                    st.error("entity_name 필드가 없습니다. 클러스터링 파이프라인을 다시 실행해주세요.")
+                    st.stop()
+
+            # entity_name이 없는 행 필터링
+            df = df[df["entity_name"].notna() & (df["entity_name"] != "")]
+            if df.empty:
+                st.error("유효한 entity_name이 있는 데이터가 없습니다. 클러스터링 파이프라인을 다시 실행해주세요.")
+                st.stop()
 
             # UMAP 산점도
             st.subheader("UMAP 2D 산점도")
