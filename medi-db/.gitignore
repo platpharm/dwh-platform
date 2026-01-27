@@ -1,0 +1,183 @@
+# Environment
+.env
+.env.local
+.env.production
+.env.development
+.env.*.local
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Virtual environments
+venv/
+ENV/
+env/
+.venv/
+.conda/
+*.virtualenv
+
+# pyenv
+.python-version
+
+# pipenv
+Pipfile.lock
+
+# poetry
+poetry.lock
+
+# IDE - JetBrains (PyCharm, IntelliJ)
+.idea/
+*.iml
+*.ipr
+*.iws
+out/
+.idea_modules/
+
+# IDE - VSCode
+.vscode/
+*.code-workspace
+
+# IDE - Vim/Neovim
+*.swp
+*.swo
+*~
+.netrwhist
+tags
+
+# IDE - Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# IDE - Spyder
+.spyderproject
+.spyproject
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+profile_default/
+ipython_config.py
+
+# Testing
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+nosetests.xml
+
+# Type checkers
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pytype/
+.pyre/
+.ruff_cache/
+
+# Linters
+.flake8_cache/
+pylint.d/
+
+# Docker
+*.log
+docker-compose.override.yml
+.docker/
+
+# OS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.lnk
+
+# Airflow
+airflow/logs/
+airflow/airflow.db
+airflow/airflow.cfg
+airflow/webserver_config.py
+airflow/standalone_admin_password.txt
+airflow/airflow-webserver.pid
+*.pid
+
+# Celery
+celerybeat-schedule
+celerybeat.pid
+
+# ML Models & Data
+*.pkl
+*.pickle
+*.joblib
+*.h5
+*.hdf5
+*.model
+*.onnx
+*.pt
+*.pth
+*.csv
+*.json
+!package.json
+!tsconfig.json
+*.parquet
+*.feather
+*.arrow
+data/
+models/
+outputs/
+
+# Streamlit
+.streamlit/secrets.toml
+
+# Elasticsearch
+elasticsearch/data/
+
+# Logs
+logs/
+*.log
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.temp
+*.bak
+
+# Claude Code
+CLAUDE.md
+jobs.yaml
+PLAN.md
+.claude/
+
+# Project docs (internal only)
+PLAN.md
+jobs.yaml

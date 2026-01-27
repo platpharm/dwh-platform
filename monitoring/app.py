@@ -20,7 +20,7 @@ load_dotenv()
 
 app = FastAPI(
     title="DWH Platform Monitor",
-    description="MediTrend & Pharm-Clustering 통합 모니터링",
+    description="MediDB & PharmDB 통합 모니터링",
     version="1.0.0",
 )
 
@@ -41,14 +41,14 @@ class SystemHealth(BaseModel):
     timestamp: str
 
 
-# MediTrend 서비스 목록
-MEDITREND_SERVICES = {
-    "crawler": "http://meditrend-crawler:8000",
-    "preprocessor": "http://meditrend-preprocessor:8000",
-    "clustering": "http://meditrend-clustering:8000",
-    "forecasting": "http://meditrend-forecasting:8000",
-    "targeting": "http://meditrend-targeting:8000",
-    "dashboard": "http://meditrend-dashboard:8501",
+# MediDB 서비스 목록
+MEDIDB_SERVICES = {
+    "crawler": "http://medi-db-crawler:8000",
+    "preprocessor": "http://medi-db-preprocessor:8000",
+    "clustering": "http://medi-db-clustering:8000",
+    "forecasting": "http://medi-db-forecasting:8000",
+    "targeting": "http://medi-db-targeting:8000",
+    "dashboard": "http://medi-db-dashboard:8501",
     "airflow": "http://airflow-webserver:8080",
 }
 
@@ -180,7 +180,7 @@ async def get_system_health():
     """전체 시스템 상태 조회"""
     # 모든 서비스 상태 확인 (병렬)
     service_checks = [
-        check_service(name, url) for name, url in MEDITREND_SERVICES.items()
+        check_service(name, url) for name, url in MEDIDB_SERVICES.items()
     ]
     services = await asyncio.gather(*service_checks)
 
@@ -209,10 +209,10 @@ async def get_system_health():
 @app.get("/services/{service_name}")
 async def get_service_status(service_name: str):
     """개별 서비스 상태 조회"""
-    if service_name not in MEDITREND_SERVICES:
+    if service_name not in MEDIDB_SERVICES:
         raise HTTPException(status_code=404, detail=f"Service '{service_name}' not found")
 
-    return await check_service(service_name, MEDITREND_SERVICES[service_name])
+    return await check_service(service_name, MEDIDB_SERVICES[service_name])
 
 
 @app.get("/es/indices")

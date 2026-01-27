@@ -6,13 +6,13 @@
 
 ```
 dwh-platform/
-├── pharm-clustering/    # 약국 데이터 수집 크롤러
-└── MediTrend/           # 의료 트렌드 분석
+├── pharm-db/      # 약국 데이터 수집 크롤러
+└── medi-db/       # 의료 트렌드 분석
 ```
 
 ## 모듈
 
-### pharm-clustering
+### PharmDB
 
 약국 택소노미 구축을 위한 데이터 수집 크롤러
 
@@ -20,32 +20,32 @@ dwh-platform/
 - Elasticsearch 저장
 - 공공데이터 API 연동
 
-[상세 문서](./pharm-clustering/README.md)
+[상세 문서](./pharm-db/README.md)
 
-### MediTrend
+### MediDB
 
 의료 트렌드 분석 모듈
 
-[상세 문서](./MediTrend/README.md)
+[상세 문서](./medi-db/README.md)
 
 ## Subtree 관리
 
 ### 업데이트 받기
 
 ```bash
-# pharm-clustering 업데이트
-git subtree pull --prefix=pharm-clustering https://github.com/platpharm/pharm-clustering.git main --squash
+# pharm-db 업데이트
+git subtree pull --prefix=pharm-db https://github.com/platpharm/pharm-clustering.git main --squash
 
-# MediTrend 업데이트
-git subtree pull --prefix=MediTrend https://github.com/platpharm/MediTrend.git main --squash
+# medi-db 업데이트
+git subtree pull --prefix=medi-db https://github.com/platpharm/MediTrend.git main --squash
 ```
 
 ### 변경사항 푸시
 
 ```bash
-# pharm-clustering에 푸시
-git subtree push --prefix=pharm-clustering https://github.com/platpharm/pharm-clustering.git main
+# pharm-db에 푸시
+git subtree push --prefix=pharm-db https://github.com/platpharm/pharm-clustering.git main
 
-# MediTrend에 푸시
-git subtree push --prefix=MediTrend https://github.com/platpharm/MediTrend.git main
+# medi-db에 푸시
+git subtree push --prefix=medi-db https://github.com/platpharm/MediTrend.git main
 ```
