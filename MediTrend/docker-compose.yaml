@@ -7,7 +7,7 @@ x-common-env: &common-env
   ES_USERNAME: ${ES_USERNAME:-}
   ES_PASSWORD: ${ES_PASSWORD:-}
   PG_HOST: host.docker.internal
-  PG_PORT: 12345
+  PG_PORT: 12346
   PG_DATABASE: platpharm
   PG_USER: postgres
   PG_PASSWORD: ${PG_PASSWORD:-}

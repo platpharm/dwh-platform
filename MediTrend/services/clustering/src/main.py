@@ -22,7 +22,7 @@ def get_expected_mappings():
     return {
         "properties": {
             "entity_type": {"type": "keyword"},
-            "entity_id": {"type": "long"},  # Use long for large product IDs
+            "entity_id": {"type": "keyword"},  # keyword supports both int and string IDs
             "cluster_id": {"type": "integer"},
             "algorithm": {"type": "keyword"},
             "features": {"type": "object", "enabled": True},
@@ -59,10 +59,10 @@ def ensure_index_exists():
                 .get("type")
             )
 
-            if entity_id_type == "integer":
+            if entity_id_type in ("integer", "long"):
                 logger.warning(
-                    f"Index {index_name} has entity_id mapped as 'integer', "
-                    "but 'long' is required for large product IDs. Recreating index..."
+                    f"Index {index_name} has entity_id mapped as '{entity_id_type}', "
+                    "but 'keyword' is required for both product and pharmacy IDs. Recreating index..."
                 )
                 # Delete and recreate with correct mapping
                 es_client.client.indices.delete(index=index_name)

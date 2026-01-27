@@ -1,6 +1,13 @@
 """
 MediTrend 메인 파이프라인 DAG
-일일 실행: 크롤링 → 전처리 → 알고리즘(병렬) → 타겟팅
+일일 실행: 상품 트렌드 크롤링 → 전처리 → 클러스터링(병렬) → 랭킹 → 타겟팅
+
+파이프라인 순서:
+1. [선택] 상품명 기반 트렌드 크롤링 (DB 상품명으로 Google Trends 수집)
+2. 전처리 (약국, 상품, 주문)
+3. 클러스터링 (상품, 약국) - 병렬 실행
+4. 랭킹 계산
+5. 타겟팅
 """
 from datetime import datetime, timedelta
 from airflow import DAG
@@ -38,41 +45,24 @@ with DAG(
 ) as dag:
 
     # ============================================================
-    # 1. 크롤링 (병렬)
+    # 1. 상품명 기반 트렌드 크롤링 (전처리 전에 실행)
     # ============================================================
-    with TaskGroup('crawling', tooltip='트렌드 데이터 크롤링') as crawling_group:
-
-        crawl_google = SimpleHttpOperator(
-            task_id='crawl_google_trends',
-            http_conn_id='crawler_service',
-            endpoint='/crawl/google',
-            method='POST',
-            headers={'Content-Type': 'application/json'},
-            data=json.dumps({
-                'keywords': ['vitamin', 'supplement', 'pain relief', 'cold medicine',
-                            'digestive', 'skin care', 'hair loss', 'diet', 'immunity']
-            }),
-            response_check=lambda response: response.json().get('success', False),
-            log_response=True,
-        )
-
-        crawl_papers = SimpleHttpOperator(
-            task_id='crawl_papers',
-            http_conn_id='crawler_service',
-            endpoint='/crawl/papers',
-            method='POST',
-            headers={'Content-Type': 'application/json'},
-            data=json.dumps({
-                'keywords': ['vitamin D', 'omega-3', 'probiotics', 'collagen'],
-                'sources': ['pubmed'],
-                'max_results': 50
-            }),
-            response_check=lambda response: response.json().get('success', False),
-            log_response=True,
-        )
+    crawl_product_trends = SimpleHttpOperator(
+        task_id='crawl_product_trends',
+        http_conn_id='crawler_service',
+        endpoint='/crawl/product-trends',
+        method='POST',
+        headers={'Content-Type': 'application/json'},
+        data=json.dumps({
+            'limit': 100,           # 상위 100개 상품
+            'include_related': True
+        }),
+        response_check=lambda response: response.json().get('success', False),
+        log_response=True,
+    )
 
     # ============================================================
-    # 2. 전처리
+    # 2. 전처리 (약국, 상품, 주문)
     # ============================================================
     preprocess_all = SimpleHttpOperator(
         task_id='preprocess_all_data',
@@ -85,9 +75,9 @@ with DAG(
     )
 
     # ============================================================
-    # 3. 알고리즘 (병렬)
+    # 3. 클러스터링 (상품, 약국) - 병렬 실행
     # ============================================================
-    with TaskGroup('algorithms', tooltip='클러스터링 및 수요예측') as algorithm_group:
+    with TaskGroup('clustering', tooltip='상품 및 약국 클러스터링') as clustering_group:
 
         # 클러스터링 - 상품
         cluster_products = SimpleHttpOperator(
@@ -121,33 +111,21 @@ with DAG(
             log_response=True,
         )
 
-        # 수요예측
-        run_forecasting = SimpleHttpOperator(
-            task_id='run_forecasting',
-            http_conn_id='forecasting_service',
-            endpoint='/forecast/run',
-            method='POST',
-            headers={'Content-Type': 'application/json'},
-            data=json.dumps({
-                'days_ahead': 30
-            }),
-            response_check=lambda response: response.json().get('success', False),
-            log_response=True,
-        )
-
-        # 랭킹 계산
-        calculate_ranking = SimpleHttpOperator(
-            task_id='calculate_ranking',
-            http_conn_id='forecasting_service',
-            endpoint='/forecast/ranking',
-            method='POST',
-            headers={'Content-Type': 'application/json'},
-            response_check=lambda response: response.json().get('success', False),
-            log_response=True,
-        )
+    # ============================================================
+    # 4. 랭킹 계산 (클러스터링 완료 후)
+    # ============================================================
+    calculate_ranking = SimpleHttpOperator(
+        task_id='calculate_ranking',
+        http_conn_id='forecasting_service',
+        endpoint='/forecast/ranking',
+        method='POST',
+        headers={'Content-Type': 'application/json'},
+        response_check=lambda response: response.json().get('success', False),
+        log_response=True,
+    )
 
     # ============================================================
-    # 4. 타겟팅
+    # 5. 타겟팅 (랭킹 계산 완료 후)
     # ============================================================
     run_targeting = SimpleHttpOperator(
         task_id='run_targeting',
@@ -164,6 +142,7 @@ with DAG(
     )
 
     # ============================================================
-    # Dependencies
+    # Dependencies (파이프라인 순서)
     # ============================================================
-    crawling_group >> preprocess_all >> algorithm_group >> run_targeting
+    # 1. 트렌드 크롤링 → 2. 전처리 → 3. 클러스터링(병렬) → 4. 랭킹 → 5. 타겟팅
+    crawl_product_trends >> preprocess_all >> clustering_group >> calculate_ranking >> run_targeting
