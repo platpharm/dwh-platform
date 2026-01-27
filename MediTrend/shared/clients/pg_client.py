@@ -112,12 +112,15 @@ class PGClient:
         limit: Optional[int] = None,
         offset: int = 0
     ) -> List[Dict[str, Any]]:
-        """주문 상세 데이터 조회"""
+        """주문 상세 데이터 조회 (약국 role: cu, bh만 포함)"""
         query = """
             SELECT od.*, o.account_id, o.created_at as ordered_at
             FROM orders_detail od
             JOIN orders o ON od.order_id = o.id
+            JOIN account a ON o.account_id = a.id
             WHERE od.deleted_at IS NULL
+              AND a.deleted_at IS NULL
+              AND a.role IN ('cu', 'bh')
             ORDER BY od.id
         """
         if limit:
@@ -136,11 +139,14 @@ class PGClient:
         return self.fetch_all(query)
 
     def get_accounts(self) -> List[Dict[str, Any]]:
-        """약국 데이터 조회"""
+        """약국 데이터 조회 (role: cu, bh만 포함)"""
         query = """
-            SELECT id, name, address, lat, lng, phone
+            SELECT id, name,
+                   COALESCE(address1, '') || ' ' || COALESCE(address2, '') || ' ' || COALESCE(address3, '') as address,
+                   region, city, phone_number as phone, host_type, status, role
             FROM account
             WHERE deleted_at IS NULL
+              AND role IN ('cu', 'bh')
             ORDER BY id
         """
         return self.fetch_all(query)

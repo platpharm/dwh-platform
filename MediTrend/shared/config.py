@@ -35,6 +35,11 @@ class ElasticsearchConfig:
 # 인덱스 Alias 정의
 class ESIndex:
     """Elasticsearch 인덱스 Alias"""
+    # CDC Source data (platpharm)
+    CDC_ORDERS_DETAIL = "platpharm.public.orders_detail"
+    CDC_PRODUCT = "platpharm.public.product"
+    CDC_ACCOUNT = "platpharm.public.account"
+
     # Raw data
     TREND_RAW = "medi-trend-raw"
     TREND_DATA = "medi-trend-trend-data"
