@@ -2,7 +2,6 @@
 import logging
 from fastapi import APIRouter, HTTPException
 
-from shared.clients.pg_client import pg_client
 from shared.clients.es_client import es_client
 from shared.models.schemas import PreprocessResponse, HealthResponse
 
@@ -21,18 +20,16 @@ async def health_check():
     """
     헬스체크 엔드포인트
 
-    서비스 상태 및 의존성(PostgreSQL, Elasticsearch) 연결 상태를 확인합니다.
+    서비스 상태 및 의존성(Elasticsearch) 연결 상태를 확인합니다.
     """
-    pg_healthy = pg_client.health_check()
     es_healthy = es_client.health_check()
 
-    status = "healthy" if (pg_healthy and es_healthy) else "unhealthy"
+    status = "healthy" if es_healthy else "unhealthy"
 
     return HealthResponse(
         status=status,
         service="preprocessor",
         dependencies={
-            "postgresql": pg_healthy,
             "elasticsearch": es_healthy
         }
     )

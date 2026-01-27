@@ -1,20 +1,87 @@
 """Elasticsearch 클라이언트"""
+import logging
+import time
+import urllib3
 from typing import Any, Dict, List, Optional, Generator
 from elasticsearch import Elasticsearch, helpers
+from elasticsearch.exceptions import ConnectionError as ESConnectionError
 from ..config import es_config, ESIndex
+
+# SSL 경고 억제 (self-signed cert 사용 시)
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+logger = logging.getLogger(__name__)
 
 
 class ESClient:
     """Elasticsearch 클라이언트 래퍼"""
 
-    def __init__(self):
-        self.client = Elasticsearch(
-            hosts=es_config.hosts,
-            basic_auth=(es_config.username, es_config.password)
-            if es_config.username and es_config.password else None,
+    def __init__(self, max_retries: int = 3, retry_delay: float = 2.0):
+        self.max_retries = max_retries
+        self.retry_delay = retry_delay
+        self.client = self._create_client()
+
+    def _create_client(self) -> Elasticsearch:
+        """ES 클라이언트 생성 (HTTPS 우선, HTTP fallback)"""
+        # 현재 설정된 scheme으로 시도
+        primary_url = f"{es_config.scheme}://{es_config.host}:{es_config.port}"
+
+        # HTTP fallback URL (로컬 개발 환경용)
+        fallback_url = f"http://{es_config.host}:{es_config.port}"
+
+        auth = None
+        if es_config.username and es_config.password:
+            auth = (es_config.username, es_config.password)
+
+        # 먼저 primary URL로 시도
+        client = self._try_connect(primary_url, auth)
+        if client:
+            logger.info(f"ES 연결 성공: {primary_url}")
+            return client
+
+        # HTTPS 설정인데 실패하면 HTTP로 fallback 시도
+        if es_config.scheme == "https":
+            logger.warning(f"HTTPS 연결 실패, HTTP로 fallback 시도: {fallback_url}")
+            client = self._try_connect(fallback_url, auth)
+            if client:
+                logger.info(f"ES HTTP 연결 성공: {fallback_url}")
+                return client
+
+        # 최종 실패 시 primary URL로 클라이언트 생성 (나중에 연결 시도)
+        logger.warning(f"ES 초기 연결 실패, 클라이언트 생성만 수행: {primary_url}")
+        return Elasticsearch(
+            hosts=[primary_url],
+            basic_auth=auth,
             request_timeout=30,
             verify_certs=False,
+            ssl_show_warn=False,
+            retry_on_timeout=True,
+            max_retries=self.max_retries,
         )
+
+    def _try_connect(self, url: str, auth: Optional[tuple]) -> Optional[Elasticsearch]:
+        """지정된 URL로 연결 시도"""
+        for attempt in range(self.max_retries):
+            try:
+                client = Elasticsearch(
+                    hosts=[url],
+                    basic_auth=auth,
+                    request_timeout=30,
+                    verify_certs=False,
+                    ssl_show_warn=False,
+                    retry_on_timeout=True,
+                    max_retries=self.max_retries,
+                )
+                if client.ping():
+                    return client
+            except ESConnectionError as e:
+                logger.warning(f"ES 연결 시도 {attempt + 1}/{self.max_retries} 실패: {url} - {e}")
+                if attempt < self.max_retries - 1:
+                    time.sleep(self.retry_delay * (attempt + 1))
+            except Exception as e:
+                logger.warning(f"ES 연결 오류: {url} - {e}")
+                break
+        return None
 
     def health_check(self) -> bool:
         """ES 연결 상태 확인"""

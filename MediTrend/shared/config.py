@@ -5,20 +5,6 @@ from typing import Optional
 
 
 @dataclass
-class PostgreSQLConfig:
-    """PostgreSQL 설정"""
-    host: str = os.getenv("PG_HOST", "host.docker.internal")
-    port: int = int(os.getenv("PG_PORT", "12345"))
-    database: str = os.getenv("PG_DATABASE", "platpharm")
-    user: str = os.getenv("PG_USER", "postgres")
-    password: str = os.getenv("PG_PASSWORD", "")
-
-    @property
-    def connection_string(self) -> str:
-        return f"postgresql://{self.user}:{self.password}@{self.host}:{self.port}/{self.database}"
-
-
-@dataclass
 class ElasticsearchConfig:
     """Elasticsearch 설정"""
     host: str = os.getenv("ES_HOST", "host.docker.internal")
@@ -28,8 +14,14 @@ class ElasticsearchConfig:
     password: Optional[str] = os.getenv("ES_PASSWORD")
 
     @property
+    def url(self) -> str:
+        """ES URL 반환"""
+        return f"{self.scheme}://{self.host}:{self.port}"
+
+    @property
     def hosts(self) -> list:
-        return [{"host": self.host, "port": self.port, "scheme": self.scheme}]
+        """ES hosts 리스트 반환 (URL 문자열 형식)"""
+        return [self.url]
 
 
 # 인덱스 Alias 정의
@@ -59,5 +51,4 @@ class ESIndex:
 
 
 # 싱글톤 설정 인스턴스
-pg_config = PostgreSQLConfig()
 es_config = ElasticsearchConfig()
