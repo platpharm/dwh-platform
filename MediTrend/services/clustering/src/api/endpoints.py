@@ -29,32 +29,91 @@ clustering_jobs: Dict[str, Dict[str, Any]] = {}
 
 
 def _fetch_product_data() -> tuple:
-    """ES에서 상품 데이터 조회"""
-    query = {"match_all": {}}
-    products = es_client.search(
+    """ES에서 상품 데이터 조회
+
+    TREND_PRODUCT_MAPPING에서 trend_score, match_score를 조회하고
+    CDC_PRODUCT에서 상품명 등 추가 정보를 조인
+    """
+    # 1. TREND_PRODUCT_MAPPING에서 트렌드/매칭 스코어 조회 (scroll로 전체)
+    trend_data = {}
+    for p in es_client.scroll_search(
         index=ESIndex.TREND_PRODUCT_MAPPING,
-        query=query,
-        size=10000
-    )
+        query={"match_all": {}},
+        size=1000
+    ):
+        product_id = p.get("product_id")
+        if product_id:
+            trend_data[int(product_id)] = {
+                "trend_score": p.get("trend_score", 0),
+                "match_score": p.get("match_score", 0),
+            }
 
-    if not products:
-        return [], [], []
+    logger.info(f"Loaded {len(trend_data)} products from TREND_PRODUCT_MAPPING")
 
-    # 특성 추출
+    # 2. CDC_PRODUCT에서 상품명, 카테고리 등 정보 조회 (scroll로 전체)
+    product_info = {}
+    for p in es_client.scroll_search(
+        index=ESIndex.CDC_PRODUCT,
+        query={"match_all": {}},
+        size=1000
+    ):
+        product_id = p.get("id")
+        if product_id:
+            try:
+                product_id_int = int(product_id)
+            except (ValueError, TypeError):
+                continue
+            product_info[product_id_int] = {
+                "product_name": p.get("name", ""),
+                "category1": p.get("category1", ""),
+                "category2": p.get("category2", ""),
+                "category3": p.get("category3", ""),
+            }
+
+    logger.info(f"Loaded {len(product_info)} products from CDC_PRODUCT")
+
+    # 3. 조인하여 특성 추출
     ids = []
     features = []
     raw_data = []
 
-    for p in products:
-        ids.append(p.get("product_id"))
+    # trend_data에 있는 상품만 클러스터링 (trend_score > 0)
+    for product_id, scores in trend_data.items():
+        trend_score = float(scores.get("trend_score", 0))
+        match_score = float(scores.get("match_score", 0))
+
+        # CDC_PRODUCT에서 상품명 조회
+        info = product_info.get(product_id, {})
+        product_name = info.get("product_name", "")
+
+        # 상품명이 없으면 스킵
+        if not product_name:
+            continue
+
+        ids.append(product_id)
 
         # 수치형 특성
         feature_vector = [
-            float(p.get("trend_score", 0)),
-            float(p.get("match_score", 0)),
+            trend_score,
+            match_score,
         ]
         features.append(feature_vector)
-        raw_data.append(p)
+
+        # raw_data에 product_name 포함
+        raw_data.append({
+            "product_id": product_id,
+            "product_name": product_name,
+            "trend_score": trend_score,
+            "match_score": match_score,
+            "category1": info.get("category1", ""),
+            "category2": info.get("category2", ""),
+            "category3": info.get("category3", ""),
+        })
+
+    logger.info(f"Prepared {len(ids)} products for clustering (with names)")
+
+    if not ids:
+        return [], [], []
 
     return ids, np.array(features), raw_data
 
@@ -100,7 +159,7 @@ def _fetch_pharmacy_data() -> tuple:
 
 def _save_clustering_results(
     entity_type: str,
-    entity_ids: List[int],
+    entity_ids: List,  # int for products, str for pharmacies
     algorithm: str,
     cluster_results: List[Dict[str, Any]],
     raw_data: List[Dict[str, Any]]
@@ -110,9 +169,20 @@ def _save_clustering_results(
     documents = []
 
     for i, (entity_id, result, raw) in enumerate(zip(entity_ids, cluster_results, raw_data)):
+        # entity_name 추출
+        if entity_type == "product":
+            entity_name = raw.get("product_name") or raw.get("name")
+        else:  # pharmacy
+            entity_name = raw.get("name") or raw.get("host_name")
+
+        # entity_name이 없으면 스킵
+        if not entity_name:
+            continue
+
         doc = ClusteringResult(
             entity_type=entity_type,
             entity_id=entity_id,
+            entity_name=entity_name,
             cluster_id=result["cluster_id"],
             algorithm=algorithm,
             features=raw,
