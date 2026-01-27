@@ -27,9 +27,6 @@ with DAG(
     tags=['medi-db', 'clustering'],
 ) as dag:
 
-    # ============================================================
-    # HDBSCAN 클러스터링
-    # ============================================================
     with TaskGroup('hdbscan_clustering', tooltip='HDBSCAN 클러스터링') as hdbscan_group:
 
         hdbscan_products = SimpleHttpOperator(
@@ -62,9 +59,6 @@ with DAG(
             log_response=True,
         )
 
-    # ============================================================
-    # GMM 클러스터링
-    # ============================================================
     with TaskGroup('gmm_clustering', tooltip='GMM 클러스터링') as gmm_group:
 
         gmm_products = SimpleHttpOperator(
@@ -97,9 +91,6 @@ with DAG(
             log_response=True,
         )
 
-    # ============================================================
-    # Mini-Batch K-Means 클러스터링
-    # ============================================================
     with TaskGroup('kmeans_clustering', tooltip='K-Means 클러스터링') as kmeans_group:
 
         kmeans_products = SimpleHttpOperator(
@@ -132,5 +123,4 @@ with DAG(
             log_response=True,
         )
 
-    # 병렬 실행 (그룹 간 의존성 없음)
     [hdbscan_group, gmm_group, kmeans_group]

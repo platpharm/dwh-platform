@@ -4,6 +4,8 @@ import pandas as pd
 import plotly.express as px
 from typing import List, Dict, Any
 
+from elasticsearch import NotFoundError
+
 from shared.clients.es_client import es_client
 from shared.config import ESIndex
 
@@ -13,20 +15,18 @@ def fetch_products() -> List[Dict[str, str]]:
     try:
         response = es_client.client.search(
             index=ESIndex.TARGETING_RESULT,
-            body={
-                "size": 0,
-                "aggs": {
-                    "products": {
-                        "terms": {
-                            "field": "product_id",
-                            "size": 500,
-                        },
-                        "aggs": {
-                            "product_name": {
-                                "terms": {
-                                    "field": "product_name.keyword",
-                                    "size": 1,
-                                }
+            size=0,
+            aggs={
+                "products": {
+                    "terms": {
+                        "field": "product_id",
+                        "size": 500,
+                    },
+                    "aggs": {
+                        "product_name": {
+                            "terms": {
+                                "field": "product_name.keyword",
+                                "size": 1,
                             }
                         }
                     }
@@ -44,6 +44,12 @@ def fetch_products() -> List[Dict[str, str]]:
                 "doc_count": bucket["doc_count"]
             })
         return products
+    except NotFoundError:
+        st.error(
+            f"인덱스 '{ESIndex.TARGETING_RESULT}'를 찾을 수 없습니다. "
+            "타겟팅 파이프라인을 먼저 실행하여 인덱스를 생성해주세요."
+        )
+        return []
     except Exception as e:
         st.error(f"상품 목록 조회 실패: {e}")
         return []
@@ -69,16 +75,20 @@ def fetch_matching_pharmacies(
 
         response = es_client.client.search(
             index=ESIndex.TARGETING_RESULT,
-            body={
-                "query": query,
-                "size": limit,
-                "sort": [
-                    {"match_score": {"order": "desc"}}
-                ]
-            }
+            query=query,
+            size=limit,
+            sort=[
+                {"match_score": {"order": "desc"}}
+            ]
         )
 
         return [hit["_source"] for hit in response["hits"]["hits"]]
+    except NotFoundError:
+        st.error(
+            f"인덱스 '{ESIndex.TARGETING_RESULT}'를 찾을 수 없습니다. "
+            "타겟팅 파이프라인을 먼저 실행하여 인덱스를 생성해주세요."
+        )
+        return []
     except Exception as e:
         st.error(f"약국 데이터 조회 실패: {e}")
         return []
@@ -89,23 +99,21 @@ def fetch_product_summary(product_id: str) -> Dict[str, Any]:
     try:
         response = es_client.client.search(
             index=ESIndex.TARGETING_RESULT,
-            body={
-                "query": {"term": {"product_id": product_id}},
-                "size": 0,
-                "aggs": {
-                    "total_pharmacies": {"value_count": {"field": "pharmacy_id"}},
-                    "target_count": {
-                        "filter": {"term": {"is_target": True}},
-                        "aggs": {"count": {"value_count": {"field": "pharmacy_id"}}}
-                    },
-                    "avg_score": {"avg": {"field": "match_score"}},
-                    "max_score": {"max": {"field": "match_score"}},
-                    "min_score": {"min": {"field": "match_score"}},
-                    "score_percentiles": {
-                        "percentiles": {
-                            "field": "match_score",
-                            "percents": [25, 50, 75, 90]
-                        }
+            query={"term": {"product_id": product_id}},
+            size=0,
+            aggs={
+                "total_pharmacies": {"value_count": {"field": "pharmacy_id"}},
+                "target_count": {
+                    "filter": {"term": {"is_target": True}},
+                    "aggs": {"count": {"value_count": {"field": "pharmacy_id"}}}
+                },
+                "avg_score": {"avg": {"field": "match_score"}},
+                "max_score": {"max": {"field": "match_score"}},
+                "min_score": {"min": {"field": "match_score"}},
+                "score_percentiles": {
+                    "percentiles": {
+                        "field": "match_score",
+                        "percents": [25, 50, 75, 90]
                     }
                 }
             }
@@ -120,6 +128,11 @@ def fetch_product_summary(product_id: str) -> Dict[str, Any]:
             "min_score": aggs.get("min_score", {}).get("value", 0),
             "percentiles": aggs.get("score_percentiles", {}).get("values", {})
         }
+    except NotFoundError:
+        st.error(
+            f"인덱스 '{ESIndex.TARGETING_RESULT}'를 찾을 수 없습니다."
+        )
+        return {}
     except Exception as e:
         st.error(f"통계 조회 실패: {e}")
         return {}
@@ -269,12 +282,12 @@ def render_page():
     with chart_col1:
         score_fig = create_score_distribution_chart(df)
         if score_fig:
-            st.plotly_chart(score_fig, use_container_width=True)
+            st.plotly_chart(score_fig, width="stretch")
 
     with chart_col2:
         cluster_fig = create_cluster_distribution_chart(df)
         if cluster_fig:
-            st.plotly_chart(cluster_fig, use_container_width=True)
+            st.plotly_chart(cluster_fig, width="stretch")
         else:
             # 타겟 여부 파이 차트로 대체
             if "is_target" in df.columns:
@@ -291,7 +304,7 @@ def render_page():
                     color_discrete_map={"타겟": "#d62728", "비타겟": "#1f77b4"}
                 )
                 fig.update_layout(height=300)
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, width="stretch")
 
     st.markdown("---")
 
@@ -350,7 +363,7 @@ def render_page():
     st.dataframe(
         df[display_columns],
         column_config=column_config,
-        use_container_width=True,
+        width="stretch",
         hide_index=True,
         height=500
     )
@@ -373,7 +386,7 @@ def render_page():
     with download_cols[1]:
         # 타겟 약국만 다운로드
         if "is_target" in df.columns:
-            target_df = df[df["is_target"] == True]
+            target_df = df[df["is_target"].eq(True)]
             if len(target_df) > 0:
                 csv_target = target_df.to_csv(index=False, encoding="utf-8-sig")
                 st.download_button(

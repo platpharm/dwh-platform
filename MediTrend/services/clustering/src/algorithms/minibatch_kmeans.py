@@ -65,10 +65,9 @@ class MiniBatchKMeansClusterer:
         """
         logger.info(f"Starting Mini-Batch K-Means with {X.shape[0]} samples, {self.n_clusters} clusters")
 
-        # 데이터 정규화
         X_scaled = self.scaler.fit_transform(X)
 
-        # 시각화용 2D UMAP 좌표 생성
+
         if X.shape[0] > 2:
             umap_reducer = UMAPReducer(
                 n_components=2,
@@ -78,7 +77,6 @@ class MiniBatchKMeansClusterer:
         else:
             self.umap_coords_ = np.zeros((X.shape[0], 2))
 
-        # Mini-Batch K-Means 클러스터링
         actual_n_clusters = min(self.n_clusters, X.shape[0])
         self.clusterer = MiniBatchKMeans(
             n_clusters=actual_n_clusters,
@@ -94,7 +92,6 @@ class MiniBatchKMeansClusterer:
         self.cluster_centers_ = self.clusterer.cluster_centers_
         self.inertia_ = self.clusterer.inertia_
 
-        # 평가 지표 계산 (클러스터가 2개 이상이고 샘플이 충분할 때)
         if actual_n_clusters >= 2 and X.shape[0] > actual_n_clusters:
             try:
                 self.silhouette_ = silhouette_score(X_scaled, self.labels_)
@@ -217,7 +214,6 @@ class MiniBatchKMeansClusterer:
         if self.labels_ is None:
             raise ValueError("Model not fitted. Call fit() first.")
 
-        # 각 샘플과 클러스터 중심 사이의 거리 계산
         if self.clusterer is not None:
             X_scaled = self.scaler.transform(
                 self.scaler.inverse_transform(

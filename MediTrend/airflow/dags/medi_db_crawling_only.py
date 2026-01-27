@@ -17,7 +17,6 @@ default_args = {
     'retry_delay': timedelta(minutes=5),
 }
 
-# 트렌드 수집 키워드 정의
 HEALTH_KEYWORDS_EN = [
     'vitamin', 'supplement', 'pain relief', 'cold medicine',
     'digestive', 'skin care', 'hair loss', 'diet', 'immunity',
@@ -42,9 +41,6 @@ with DAG(
     tags=['medi-db', 'crawling'],
 ) as dag:
 
-    # ============================================================
-    # 구글 트렌드 크롤링
-    # ============================================================
     with TaskGroup('google_crawling', tooltip='구글 트렌드') as google_group:
 
         crawl_google_health = SimpleHttpOperator(
@@ -89,9 +85,6 @@ with DAG(
             log_response=True,
         )
 
-    # ============================================================
-    # 논문 크롤링
-    # ============================================================
     crawl_papers = SimpleHttpOperator(
         task_id='crawl_research_papers',
         http_conn_id='crawler_service',
@@ -107,5 +100,4 @@ with DAG(
         log_response=True,
     )
 
-    # 병렬 실행
     [google_group, crawl_papers]

@@ -8,8 +8,6 @@ from shared.clients.es_client import es_client
 from shared.config import ESIndex
 
 from .api import router
-
-# 로깅 설정
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
@@ -79,10 +77,8 @@ def ensure_index_exists():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """애플리케이션 생명주기 관리"""
-    # Startup
     logger.info("Starting Clustering Service...")
 
-    # ES 연결 확인
     if es_client.health_check():
         logger.info("Elasticsearch connection established")
         ensure_index_exists()
@@ -91,11 +87,9 @@ async def lifespan(app: FastAPI):
 
     yield
 
-    # Shutdown
     logger.info("Shutting down Clustering Service...")
 
 
-# FastAPI 앱 생성
 app = FastAPI(
     title="MediDB Clustering Service",
     description="상품 및 약국 클러스터링 서비스 (HDBSCAN, K-Prototype, GMM, Mini-Batch K-Means)",
@@ -103,7 +97,6 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# CORS 설정
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -112,7 +105,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 라우터 등록
 app.include_router(router, tags=["clustering"])
 
 

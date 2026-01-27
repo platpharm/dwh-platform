@@ -63,10 +63,9 @@ class GMMClusterer:
         """
         logger.info(f"Starting GMM clustering with {X.shape[0]} samples, {self.n_components} components")
 
-        # 데이터 정규화
         X_scaled = self.scaler.fit_transform(X)
 
-        # 시각화용 2D UMAP 좌표 생성
+
         if X.shape[0] > 2:
             umap_reducer = UMAPReducer(
                 n_components=2,
@@ -76,7 +75,6 @@ class GMMClusterer:
         else:
             self.umap_coords_ = np.zeros((X.shape[0], 2))
 
-        # GMM 클러스터링
         self.clusterer = GaussianMixture(
             n_components=min(self.n_components, X.shape[0]),
             covariance_type=self.covariance_type,
@@ -91,7 +89,6 @@ class GMMClusterer:
         self.labels_ = self.clusterer.predict(X_scaled)
         self.probabilities_ = self.clusterer.predict_proba(X_scaled)
 
-        # 모델 평가 지표
         self.bic_ = self.clusterer.bic(X_scaled)
         self.aic_ = self.clusterer.aic(X_scaled)
 
@@ -159,7 +156,6 @@ class GMMClusterer:
             else:
                 scores.append((n, gmm.aic(X_scaled)))
 
-        # 최소 점수의 컴포넌트 수 반환
         optimal = min(scores, key=lambda x: x[1])
         logger.info(f"Optimal components by {criterion}: {optimal[0]} (score={optimal[1]:.2f})")
 

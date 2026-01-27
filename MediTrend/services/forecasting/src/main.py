@@ -10,9 +10,7 @@ from src.api.endpoints import router
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """애플리케이션 생명주기 관리"""
-    # Startup
     yield
-    # Shutdown
 
 
 app = FastAPI(
@@ -22,7 +20,6 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# API 라우터 등록
 app.include_router(router)
 
 

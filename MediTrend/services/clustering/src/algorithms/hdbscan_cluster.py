@@ -62,10 +62,9 @@ class HDBSCANClusterer:
         """
         logger.info(f"Starting HDBSCAN clustering with {X.shape[0]} samples")
 
-        # 데이터 정규화
         X_scaled = self.scaler.fit_transform(X)
 
-        # UMAP 차원 축소 (선택적)
+
         if self.use_umap and X.shape[1] > self.umap_n_components:
             logger.info(f"Applying UMAP: {X.shape[1]} -> {self.umap_n_components} dimensions")
             self.umap_reducer = UMAPReducer(
@@ -76,11 +75,9 @@ class HDBSCANClusterer:
         else:
             X_reduced = X_scaled
 
-        # 시각화용 2D UMAP 좌표 생성
         umap_2d = UMAPReducer(n_components=2, n_neighbors=min(15, X.shape[0] - 1))
         self.umap_coords_ = umap_2d.fit_transform(X_scaled)
 
-        # HDBSCAN 클러스터링
         self.clusterer = hdbscan.HDBSCAN(
             min_cluster_size=self.min_cluster_size,
             min_samples=self.min_samples,

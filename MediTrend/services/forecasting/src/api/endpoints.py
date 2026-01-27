@@ -23,10 +23,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-# ============================================================
-# Request/Response 스키마
-# ============================================================
-
 class RankingRequest(BaseModel):
     """랭킹 계산 요청"""
     days: int = 30
@@ -67,10 +63,6 @@ class VectorResponse(BaseModel):
     message: str
 
 
-# ============================================================
-# 수요예측 엔드포인트
-# ============================================================
-
 @router.post("/forecast/run", response_model=ForecastResponse, tags=["Forecast"])
 async def run_forecast(request: ForecastRequest):
     """수요예측 실행
@@ -80,7 +72,6 @@ async def run_forecast(request: ForecastRequest):
     try:
         forecaster = DemandForecaster()
 
-        # 예측 실행
         results = forecaster.run_forecast(
             product_ids=request.product_ids,
             days_ahead=request.days_ahead,
@@ -94,7 +85,6 @@ async def run_forecast(request: ForecastRequest):
                 message="No products to forecast. Check if historical data exists."
             )
 
-        # 결과 저장
         success_count, failed_count = forecaster.save_results(results)
 
         return ForecastResponse(
@@ -147,10 +137,6 @@ async def get_forecast_results(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# ============================================================
-# 랭킹 엔드포인트
-# ============================================================
-
 @router.post("/forecast/ranking", response_model=RankingResponse, tags=["Ranking"])
 async def run_ranking(request: RankingRequest):
     """인기 의약품 랭킹 계산
@@ -160,7 +146,6 @@ async def run_ranking(request: RankingRequest):
     try:
         calculator = RankingCalculator()
 
-        # 랭킹 계산
         results = calculator.run_ranking(
             days=request.days,
             category=request.category,
@@ -174,7 +159,6 @@ async def run_ranking(request: RankingRequest):
                 message="No products to rank. Check if sales data exists."
             )
 
-        # 결과 저장
         success_count, failed_count = calculator.save_results(results)
 
         return RankingResponse(
@@ -209,7 +193,6 @@ async def get_ranking_results(
             size=10000
         )
 
-        # rank 순으로 정렬
         results.sort(key=lambda x: x.get('rank', float('inf')))
         results = results[:top_n]
 
@@ -230,10 +213,6 @@ async def get_ranking_results(
         logger.error(f"Failed to get ranking results: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
-# ============================================================
-# 트렌드 엔드포인트
-# ============================================================
 
 @router.get("/trend/emerging", tags=["Trend"])
 async def get_emerging_trends(
@@ -281,10 +260,6 @@ async def get_product_trend(product_id: int):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# ============================================================
-# 벡터 엔드포인트
-# ============================================================
-
 @router.post("/vector/generate", response_model=VectorResponse, tags=["Vector"])
 async def generate_vectors(request: VectorRequest):
     """트렌드+주문 벡터 생성
@@ -311,7 +286,6 @@ async def generate_vectors(request: VectorRequest):
                 message="No data available for vector generation."
             )
 
-        # 벡터 저장
         success_count, failed_count = generator.save_vectors(
             entity_type=request.entity_type,
             ids_df=ids_df,

@@ -31,9 +31,6 @@ with DAG(
     }
 ) as dag:
 
-    # ============================================================
-    # 수요예측 실행
-    # ============================================================
     run_forecasting = SimpleHttpOperator(
         task_id='run_demand_forecasting',
         http_conn_id='forecasting_service',
@@ -47,9 +44,6 @@ with DAG(
         log_response=True,
     )
 
-    # ============================================================
-    # 랭킹 계산 (7:3 가중치)
-    # ============================================================
     calculate_ranking = SimpleHttpOperator(
         task_id='calculate_product_ranking',
         http_conn_id='forecasting_service',
@@ -64,9 +58,6 @@ with DAG(
         log_response=True,
     )
 
-    # ============================================================
-    # 트렌드 분석
-    # ============================================================
     extract_emerging_trends = SimpleHttpOperator(
         task_id='extract_emerging_trends',
         http_conn_id='forecasting_service',
@@ -76,7 +67,4 @@ with DAG(
         log_response=True,
     )
 
-    # ============================================================
-    # Dependencies
-    # ============================================================
     run_forecasting >> calculate_ranking >> extract_emerging_trends

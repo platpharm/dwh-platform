@@ -76,12 +76,16 @@ def create_cluster_distribution(df: pd.DataFrame, group_by: str) -> go.Figure:
 
 def create_cluster_stats_table(df: pd.DataFrame) -> pd.DataFrame:
     """클러스터별 통계 테이블 생성"""
-    stats = df.groupby("cluster_id").agg(
-        count=("entity_id", "count"),
-        avg_score=("score", "mean") if "score" in df.columns else ("entity_id", "count"),
-    ).reset_index()
+    agg_dict = {"entity_id": ("entity_id", "count")}
+    if "score" in df.columns:
+        agg_dict["avg_score"] = ("score", "mean")
 
-    stats.columns = ["클러스터 ID", "항목 수", "평균 점수"]
+    stats = df.groupby("cluster_id").agg(**agg_dict).reset_index()
+
+    if "score" in df.columns:
+        stats.columns = ["클러스터 ID", "항목 수", "평균 점수"]
+    else:
+        stats.columns = ["클러스터 ID", "항목 수"]
     return stats
 
 
@@ -136,17 +140,19 @@ def render_page():
                         lambda x: x.get("product_name") or x.get("name") or x.get("host_name") if isinstance(x, dict) else None
                     )
                 else:
-                    st.error("entity_name 필드가 없습니다. 클러스터링 파이프라인을 다시 실행해주세요.")
-                    st.stop()
+                    df["entity_name"] = None
 
-            df = df[df["entity_name"].notna() & (df["entity_name"] != "")]
-            if df.empty:
-                st.error("유효한 entity_name이 있는 데이터가 없습니다. 클러스터링 파이프라인을 다시 실행해주세요.")
-                st.stop()
+            # entity_name이 없는 행은 entity_id로 대체
+            df["entity_name"] = df["entity_name"].fillna(df["entity_id"].astype(str))
+            df.loc[df["entity_name"] == "", "entity_name"] = df.loc[df["entity_name"] == "", "entity_id"].astype(str)
 
             st.subheader("UMAP 2D 산점도")
-            umap_fig = create_umap_scatter(df)
-            st.plotly_chart(umap_fig, use_container_width=True)
+            has_umap = not (df["umap_x"].eq(0).all() and df["umap_y"].eq(0).all())
+            if has_umap:
+                umap_fig = create_umap_scatter(df)
+                st.plotly_chart(umap_fig, use_container_width=True)
+            else:
+                st.info("UMAP 좌표 데이터가 없어 산점도를 표시할 수 없습니다. use_umap=True로 클러스터링을 다시 실행해주세요.")
 
             col1, col2 = st.columns(2)
 
@@ -169,11 +175,11 @@ def render_page():
             with col2:
                 st.subheader("클러스터 통계")
                 stats_df = create_cluster_stats_table(df)
-                st.dataframe(stats_df, use_container_width=True)
+                st.dataframe(stats_df, width="stretch")
 
             st.subheader("상세 데이터")
             with st.expander("데이터 테이블 보기"):
-                st.dataframe(df, use_container_width=True)
+                st.dataframe(df, width="stretch")
 
         else:
             st.info("조회된 데이터가 없습니다. ES 인덱스를 확인해주세요.")

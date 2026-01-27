@@ -75,10 +75,8 @@ class PharmacyProcessor:
         """
         logger.info(f"Calculating order statistics for {len(pharmacy_ids)} pharmacies...")
 
-        # 주문 데이터 집계용 딕셔너리
         account_orders: Dict[str, List[Dict]] = defaultdict(list)
 
-        # 날짜 범위
         end_date = datetime.utcnow()
         start_date = end_date - timedelta(days=days)
 
@@ -94,7 +92,6 @@ class PharmacyProcessor:
             }
         }
 
-        # scroll로 전체 주문 조회
         order_count = 0
         for doc in self.es.scroll_search(
             index=ESIndex.CDC_ORDERS_DETAIL,
@@ -114,29 +111,21 @@ class PharmacyProcessor:
 
         logger.info(f"Retrieved {order_count} orders for pharmacy statistics")
 
-        # 약국별 통계 계산
         stats: Dict[str, Dict[str, float]] = {}
 
         for account_id, orders in account_orders.items():
             if not orders:
                 continue
 
-            # 총 주문 수 (unique order_id 기준)
             unique_orders = len(set(o.get("order_id") for o in orders if o.get("order_id")))
 
-            # 총 주문 금액
             total_amount = sum(
                 (o.get("order_qty", 0) or 0) * (o.get("order_price", 0) or 0)
                 for o in orders
             )
 
-            # 평균 주문 금액
             avg_order_amount = total_amount / unique_orders if unique_orders > 0 else 0
-
-            # 주문 빈도 (일당 주문 수)
             order_frequency = unique_orders / days if days > 0 else 0
-
-            # 구매 상품 다양성 (unique product_id)
             unique_products = len(set(o.get("product_id") for o in orders if o.get("product_id")))
 
             stats[account_id] = {
@@ -161,7 +150,6 @@ class PharmacyProcessor:
         start_time = datetime.now()
 
         try:
-            # CDC ES에서 약국 데이터 조회
             accounts = self._get_accounts_from_cdc()
 
             if not accounts:
@@ -172,23 +160,19 @@ class PharmacyProcessor:
                     "message": "No account data to process"
                 }
 
-            # DataFrame으로 변환
             df = pd.DataFrame(accounts)
             original_count = len(df)
 
-            # 전처리 수행
             df = self._clean_data(df)
             df = self._enrich_data(df)
             df = self._validate_coordinates(df)
 
-            # 주문 통계 계산 및 병합
             pharmacy_ids = {str(id) for id in df["id"].dropna()}
             order_stats = self._get_order_statistics_from_cdc(pharmacy_ids)
             df = self._merge_order_statistics(df, order_stats)
 
             processed_count = len(df)
 
-            # ES에 인덱싱
             indexed_count = self._index_to_es(df)
 
             elapsed = (datetime.now() - start_time).total_seconds()
@@ -223,10 +207,7 @@ class PharmacyProcessor:
         """
         logger.info("Cleaning pharmacy data")
 
-        # 필수 필드 NULL 제거
         df = df.dropna(subset=["id", "name"])
-
-        # 텍스트 필드 정제
         if "name" in df.columns:
             df["name"] = df["name"].str.strip()
 
@@ -247,9 +228,7 @@ class PharmacyProcessor:
         logger.info("Enriching pharmacy data")
 
         if "address" in df.columns:
-            # 시/도 추출
             df["region_sido"] = df["address"].apply(self._extract_sido)
-            # 시/군/구 추출
             df["region_sigungu"] = df["address"].apply(self._extract_sigungu)
 
         return df
@@ -261,12 +240,10 @@ class PharmacyProcessor:
         """
         logger.info("Validating coordinates")
 
-        # 한국 위경도 범위
         korea_lat_range = (33.0, 43.0)
         korea_lng_range = (124.0, 132.0)
 
         if "lat" in df.columns and "lng" in df.columns:
-            # 유효하지 않은 좌표 마킹
             df["has_valid_coords"] = (
                 df["lat"].between(*korea_lat_range) &
                 df["lng"].between(*korea_lng_range) &
@@ -297,14 +274,12 @@ class PharmacyProcessor:
         """
         logger.info("Merging order statistics with pharmacy data")
 
-        # 통계 컬럼 초기화
         df["total_orders"] = 0.0
         df["total_amount"] = 0.0
         df["avg_order_amount"] = 0.0
         df["order_frequency"] = 0.0
         df["unique_products"] = 0.0
 
-        # 통계 병합
         stats_count = 0
         for idx, row in df.iterrows():
             pharmacy_id = str(row.get("id", ""))
@@ -333,27 +308,23 @@ class PharmacyProcessor:
         """
         logger.info(f"Indexing {len(df)} pharmacy records to ES")
 
-        # DataFrame을 dict 리스트로 변환
         records = df.copy()
 
         # pharmacy_id 필드 추가 (클러스터링 서비스 호환)
         if "id" in records.columns:
             records["pharmacy_id"] = records["id"]
 
-        # Boolean 컬럼을 Python bool로 변환
         for col in records.columns:
             if records[col].dtype == 'bool':
                 records[col] = records[col].astype(object)
 
         documents = records.to_dict('records')
 
-        # NaN을 None으로 변환
         for doc in documents:
             for key, value in doc.items():
                 if pd.isna(value):
                     doc[key] = None
 
-        # 배치로 나누어 인덱싱
         total_indexed = 0
         for i in range(0, len(documents), batch_size):
             batch = documents[i:i + batch_size]
@@ -377,10 +348,8 @@ class PharmacyProcessor:
         if not phone:
             return ""
 
-        # 숫자만 추출
         digits = re.sub(r"\D", "", phone)
 
-        # 형식에 맞게 포맷팅
         if len(digits) == 11:  # 010-1234-5678
             return f"{digits[:3]}-{digits[3:7]}-{digits[7:]}"
         elif len(digits) == 10:  # 02-1234-5678 or 031-123-5678
@@ -398,7 +367,6 @@ class PharmacyProcessor:
         if not address:
             return ""
 
-        # 시/도 패턴
         sido_patterns = [
             r"^(서울|부산|대구|인천|광주|대전|울산|세종)",
             r"^(경기|강원|충북|충남|전북|전남|경북|경남|제주)",
@@ -410,7 +378,6 @@ class PharmacyProcessor:
             match = re.search(pattern, address)
             if match:
                 sido = match.group(1)
-                # 정규화
                 sido_map = {
                     "서울특별시": "서울", "서울": "서울",
                     "부산광역시": "부산", "부산": "부산",
@@ -439,13 +406,11 @@ class PharmacyProcessor:
         if not address:
             return ""
 
-        # 시/군/구 패턴
         pattern = r"(?:시|도)\s*([가-힣]+(?:시|군|구))"
         match = re.search(pattern, address)
         if match:
             return match.group(1)
 
-        # 특별시/광역시의 구 패턴
         pattern = r"(?:서울|부산|대구|인천|광주|대전|울산)(?:특별시|광역시)?\s*([가-힣]+구)"
         match = re.search(pattern, address)
         if match:
@@ -457,19 +422,14 @@ class PharmacyProcessor:
         """통계 정보가 포함된 약국 데이터 조회 (약국 role: cu, bh만 포함) - CDC ES 사용"""
         logger.info("Fetching pharmacies with stats from CDC ES...")
 
-        # CDC ES에서 약국 데이터 조회
         accounts = self._get_accounts_from_cdc()
 
         if not accounts:
             return []
 
-        # 약국 ID 집합
         pharmacy_ids = {str(a["id"]) for a in accounts if a.get("id")}
-
-        # 주문 통계 계산
         order_stats = self._get_order_statistics_from_cdc(pharmacy_ids)
 
-        # 약국 데이터에 통계 병합
         results = []
         for account in accounts:
             pharmacy_id = str(account.get("id", ""))
@@ -487,7 +447,6 @@ class PharmacyProcessor:
                 "total_qty": 0  # 별도 집계 필요 시 추가
             })
 
-        # order_count 기준 내림차순 정렬
         results.sort(key=lambda x: x["order_count"], reverse=True)
 
         logger.info(f"Fetched {len(results)} pharmacies with stats from CDC ES")
@@ -510,5 +469,4 @@ class PharmacyProcessor:
         return df.to_dict("records")
 
 
-# 싱글톤 인스턴스
 pharmacy_processor = PharmacyProcessor()

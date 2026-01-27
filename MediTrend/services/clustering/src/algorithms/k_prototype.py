@@ -67,14 +67,12 @@ class KPrototypeClusterer:
         X_processed = X.copy()
         numerical_indices = [i for i in range(X.shape[1]) if i not in categorical_indices]
 
-        # 수치형 변수 정규화
         if numerical_indices:
             X_numerical = X[:, numerical_indices].astype(float)
             X_numerical_scaled = self.scaler.fit_transform(X_numerical)
             for i, idx in enumerate(numerical_indices):
                 X_processed[:, idx] = X_numerical_scaled[:, i]
 
-        # 범주형 변수 인코딩
         for idx in categorical_indices:
             le = LabelEncoder()
             X_processed[:, idx] = le.fit_transform(X[:, idx].astype(str))
@@ -99,17 +97,15 @@ class KPrototypeClusterer:
         """
         logger.info(f"Starting K-Prototype clustering with {X.shape[0]} samples")
 
-        # 범주형 변수 인덱스 자동 감지
         if categorical_indices is None:
             categorical_indices = self._detect_categorical(X)
 
         self.categorical_indices_ = categorical_indices
         logger.info(f"Categorical indices: {categorical_indices}")
 
-        # 데이터 전처리
         X_processed = self._preprocess_data(X, categorical_indices)
 
-        # 수치형 변수만 추출하여 UMAP 좌표 생성
+
         numerical_indices = [i for i in range(X.shape[1]) if i not in categorical_indices]
         if numerical_indices:
             X_numerical = X_processed[:, numerical_indices].astype(float)
@@ -124,7 +120,6 @@ class KPrototypeClusterer:
         else:
             self.umap_coords_ = np.zeros((X.shape[0], 2))
 
-        # K-Prototype 클러스터링
         self.clusterer = KPrototypes(
             n_clusters=min(self.n_clusters, X.shape[0]),
             init=self.init,

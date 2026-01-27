@@ -22,7 +22,6 @@ class OrderProcessor:
         """CDC ES에서 주문 상세 데이터 조회 (약국 role: cu, bh만 포함)"""
         logger.info("Fetching orders detail from CDC ES...")
 
-        # 먼저 약국 account_id 목록 조회
         pharmacy_ids = self._get_pharmacy_ids_from_cdc()
 
         query = {
@@ -98,7 +97,6 @@ class OrderProcessor:
         start_time = datetime.now()
 
         try:
-            # CDC ES에서 주문 상세 데이터 조회
             orders_detail = self._get_orders_detail_from_cdc(limit=limit)
 
             if not orders_detail:
@@ -109,18 +107,15 @@ class OrderProcessor:
                     "message": "No order data to process"
                 }
 
-            # DataFrame으로 변환
             df = pd.DataFrame(orders_detail)
             original_count = len(df)
 
-            # 전처리 수행
             df = self._clean_data(df)
             df = self._enrich_data(df)
             df = self._aggregate_data(df)
 
             processed_count = len(df)
 
-            # ES에 인덱싱
             indexed_count = self._index_to_es(df)
 
             elapsed = (datetime.now() - start_time).total_seconds()
@@ -156,18 +151,14 @@ class OrderProcessor:
         """
         logger.info("Cleaning order data")
 
-        # NULL 값 처리
         df = df.dropna(subset=["order_id", "product_id"])
 
-        # 수량이 0 이하인 레코드 제거
         if "order_qty" in df.columns:
             df = df[df["order_qty"] > 0]
 
-        # 가격이 0 이하인 레코드 제거
         if "order_price" in df.columns:
             df = df[df["order_price"] > 0]
 
-        # 날짜 형식 변환
         if "ordered_at" in df.columns:
             df["ordered_at"] = pd.to_datetime(df["ordered_at"])
 
@@ -181,11 +172,9 @@ class OrderProcessor:
         """
         logger.info("Enriching order data")
 
-        # 총 금액 계산
         if "order_qty" in df.columns and "order_price" in df.columns:
             df["total_amount"] = df["order_qty"] * df["order_price"]
 
-        # 주문 날짜 분리
         if "ordered_at" in df.columns:
             df["order_date"] = df["ordered_at"].dt.date
             df["order_year"] = df["ordered_at"].dt.year
@@ -204,7 +193,6 @@ class OrderProcessor:
         """
         logger.info("Aggregating order data")
 
-        # 원본 데이터 유지 (집계는 별도로 수행)
         return df
 
     def _serialize_value(self, value):
@@ -228,31 +216,25 @@ class OrderProcessor:
         """
         logger.info(f"Indexing {len(df)} order records to ES")
 
-        # DataFrame을 dict 리스트로 변환 (JSON 직렬화 가능하도록)
         records = df.copy()
 
-        # 모든 컬럼 처리
         for col in records.columns:
             dtype_str = str(records[col].dtype)
 
-            # datetime64 타입 (timezone aware/naive 모두)
             if 'datetime64' in dtype_str:
                 records[col] = records[col].apply(
                     lambda x: x.isoformat() if pd.notna(x) else None
                 )
-            # object 타입 (Timestamp, date, NaT 등 포함 가능)
             elif dtype_str == 'object':
                 records[col] = records[col].apply(self._serialize_value)
 
         documents = records.to_dict('records')
 
-        # NaN/NaT를 None으로 변환
         for doc in documents:
             for key, value in doc.items():
                 if pd.isna(value):
                     doc[key] = None
 
-        # 배치로 나누어 인덱싱
         total_indexed = 0
         for i in range(0, len(documents), batch_size):
             batch = documents[i:i + batch_size]
@@ -275,13 +257,9 @@ class OrderProcessor:
         """상품별 판매 요약 조회 (약국 role: cu, bh만 포함) - CDC ES 사용"""
         logger.info("Calculating product sales summary from CDC ES...")
 
-        # 약국 ID 목록 조회
         pharmacy_ids = self._get_pharmacy_ids_from_cdc()
-
-        # 상품명 매핑 조회
         product_names = self._get_product_names_from_cdc()
 
-        # 주문 데이터 집계
         product_stats: Dict[str, Dict] = defaultdict(lambda: {
             "product_id": None,
             "product_name": "",
@@ -321,7 +299,6 @@ class OrderProcessor:
             stats["total_qty"] += doc.get("order_qty", 0) or 0
             stats["total_amount"] += (doc.get("order_qty", 0) or 0) * (doc.get("order_price", 0) or 0)
 
-        # 결과 변환
         results = []
         for product_id, stats in product_stats.items():
             results.append({
@@ -333,7 +310,6 @@ class OrderProcessor:
                 "total_amount": stats["total_amount"]
             })
 
-        # total_qty 기준 내림차순 정렬
         results.sort(key=lambda x: x["total_qty"], reverse=True)
 
         logger.info(f"Calculated sales summary for {len(results)} products")
@@ -388,11 +364,9 @@ class OrderProcessor:
         """약국별 구매 요약 조회 (약국 role: cu, bh만 포함) - CDC ES 사용"""
         logger.info("Calculating pharmacy purchase summary from CDC ES...")
 
-        # 약국 ID 목록 및 이름 조회
         pharmacy_ids = self._get_pharmacy_ids_from_cdc()
         account_names = self._get_account_names_from_cdc(pharmacy_ids)
 
-        # 약국별 주문 데이터 집계
         pharmacy_stats: Dict[str, Dict] = defaultdict(lambda: {
             "account_id": None,
             "pharmacy_name": "",
@@ -432,7 +406,6 @@ class OrderProcessor:
             stats["total_qty"] += doc.get("order_qty", 0) or 0
             stats["total_amount"] += (doc.get("order_qty", 0) or 0) * (doc.get("order_price", 0) or 0)
 
-        # 결과 변환
         results = []
         for account_id, stats in pharmacy_stats.items():
             results.append({
@@ -444,12 +417,10 @@ class OrderProcessor:
                 "total_amount": stats["total_amount"]
             })
 
-        # total_amount 기준 내림차순 정렬
         results.sort(key=lambda x: x["total_amount"], reverse=True)
 
         logger.info(f"Calculated purchase summary for {len(results)} pharmacies")
         return results
 
 
-# 싱글톤 인스턴스
 order_processor = OrderProcessor()

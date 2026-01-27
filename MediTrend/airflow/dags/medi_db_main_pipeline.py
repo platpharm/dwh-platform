@@ -44,9 +44,6 @@ with DAG(
     tags=['medi-db', 'main'],
 ) as dag:
 
-    # ============================================================
-    # 1. 상품명 기반 트렌드 크롤링 (전처리 전에 실행)
-    # ============================================================
     crawl_product_trends = SimpleHttpOperator(
         task_id='crawl_product_trends',
         http_conn_id='crawler_service',
@@ -61,9 +58,6 @@ with DAG(
         log_response=True,
     )
 
-    # ============================================================
-    # 2. 전처리 (약국, 상품, 주문)
-    # ============================================================
     preprocess_all = SimpleHttpOperator(
         task_id='preprocess_all_data',
         http_conn_id='preprocessor_service',
@@ -74,12 +68,8 @@ with DAG(
         log_response=True,
     )
 
-    # ============================================================
-    # 3. 클러스터링 (상품, 약국) - 병렬 실행
-    # ============================================================
     with TaskGroup('clustering', tooltip='상품 및 약국 클러스터링') as clustering_group:
 
-        # 클러스터링 - 상품
         cluster_products = SimpleHttpOperator(
             task_id='cluster_products',
             http_conn_id='clustering_service',
@@ -95,7 +85,6 @@ with DAG(
             log_response=True,
         )
 
-        # 클러스터링 - 약국
         cluster_pharmacies = SimpleHttpOperator(
             task_id='cluster_pharmacies',
             http_conn_id='clustering_service',
@@ -111,9 +100,6 @@ with DAG(
             log_response=True,
         )
 
-    # ============================================================
-    # 4. 랭킹 계산 (클러스터링 완료 후)
-    # ============================================================
     calculate_ranking = SimpleHttpOperator(
         task_id='calculate_ranking',
         http_conn_id='forecasting_service',
@@ -124,9 +110,6 @@ with DAG(
         log_response=True,
     )
 
-    # ============================================================
-    # 5. 타겟팅 (랭킹 계산 완료 후)
-    # ============================================================
     run_targeting = SimpleHttpOperator(
         task_id='run_targeting',
         http_conn_id='targeting_service',
@@ -141,8 +124,4 @@ with DAG(
         log_response=True,
     )
 
-    # ============================================================
-    # Dependencies (파이프라인 순서)
-    # ============================================================
-    # 1. 트렌드 크롤링 → 2. 전처리 → 3. 클러스터링(병렬) → 4. 랭킹 → 5. 타겟팅
     crawl_product_trends >> preprocess_all >> clustering_group >> calculate_ranking >> run_targeting

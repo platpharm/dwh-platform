@@ -5,21 +5,18 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from src.api.endpoints import router
 
-# 로깅 설정
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
-# FastAPI 앱 생성
 app = FastAPI(
     title="MediDB Preprocessor Service",
     description="의약품 데이터 전처리 및 키워드 추출 서비스",
     version="1.0.0",
 )
 
-# CORS 미들웨어 추가
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -28,7 +25,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 라우터 등록
 app.include_router(router)
 
 

@@ -3,13 +3,14 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
+
+from elasticsearch.exceptions import NotFoundError
 
 from shared.clients.es_client import es_client
 from shared.config import ESIndex
 
 
-# 가중치 상수
 SALES_WEIGHT = 0.7
 TREND_WEIGHT = 0.3
 
@@ -31,6 +32,12 @@ def fetch_ranking_data(
             size=limit,
         )
         return results
+    except NotFoundError:
+        st.error(
+            f"인덱스 '{ESIndex.RANKING_RESULT}'가 존재하지 않습니다. "
+            "랭킹 파이프라인을 먼저 실행하여 인덱스를 생성해주세요."
+        )
+        return []
     except Exception as e:
         st.error(f"데이터 조회 실패: {e}")
         return []
@@ -39,7 +46,6 @@ def fetch_ranking_data(
 def fetch_categories() -> List[str]:
     """카테고리 목록 조회"""
     try:
-        # 집계 쿼리로 카테고리 목록 조회
         response = es_client.client.search(
             index=ESIndex.RANKING_RESULT,
             body={
@@ -67,7 +73,6 @@ def calculate_weighted_score(sales_score: float, trend_score: float) -> float:
 
 def create_ranking_table(df: pd.DataFrame) -> pd.DataFrame:
     """랭킹 테이블 생성"""
-    # 가중치 점수 계산
     if "sales_score" in df.columns and "trend_score" in df.columns:
         df["weighted_score"] = df.apply(
             lambda row: calculate_weighted_score(row["sales_score"], row["trend_score"]),
@@ -76,20 +81,21 @@ def create_ranking_table(df: pd.DataFrame) -> pd.DataFrame:
     elif "weighted_score" not in df.columns:
         df["weighted_score"] = 0
 
-    # 랭킹 정렬
     df = df.sort_values("weighted_score", ascending=False).reset_index(drop=True)
     df["rank"] = range(1, len(df) + 1)
 
     return df
 
 
-def create_ranking_bar_chart(df: pd.DataFrame, top_n: int = 20) -> go.Figure:
+def create_ranking_bar_chart(df: pd.DataFrame, top_n: int = 20) -> Optional[go.Figure]:
     """상위 N개 랭킹 바 차트"""
+    if df.empty or "product_name" not in df.columns:
+        return None
+
     top_df = df.head(top_n)
 
     fig = go.Figure()
 
-    # 판매량 점수 바
     fig.add_trace(go.Bar(
         y=top_df["product_name"],
         x=top_df["sales_score"] * SALES_WEIGHT if "sales_score" in top_df.columns else [0] * len(top_df),
@@ -98,7 +104,6 @@ def create_ranking_bar_chart(df: pd.DataFrame, top_n: int = 20) -> go.Figure:
         marker_color="steelblue",
     ))
 
-    # 트렌드 점수 바
     fig.add_trace(go.Bar(
         y=top_df["product_name"],
         x=top_df["trend_score"] * TREND_WEIGHT if "trend_score" in top_df.columns else [0] * len(top_df),
@@ -126,12 +131,14 @@ def create_ranking_bar_chart(df: pd.DataFrame, top_n: int = 20) -> go.Figure:
     return fig
 
 
-def create_score_comparison_chart(df: pd.DataFrame, top_n: int = 10) -> go.Figure:
+def create_score_comparison_chart(df: pd.DataFrame, top_n: int = 10) -> Optional[go.Figure]:
     """판매량 vs 트렌드 점수 비교 산점도"""
-    if "sales_score" not in df.columns or "trend_score" not in df.columns:
+    if df.empty or "sales_score" not in df.columns or "trend_score" not in df.columns:
         return None
 
     top_df = df.head(top_n)
+    if top_df.empty:
+        return None
 
     fig = px.scatter(
         top_df,
@@ -149,16 +156,15 @@ def create_score_comparison_chart(df: pd.DataFrame, top_n: int = 10) -> go.Figur
         height=400,
     )
 
-    # 기준선 추가
     fig.add_hline(y=top_df["trend_score"].mean(), line_dash="dash", line_color="gray")
     fig.add_vline(x=top_df["sales_score"].mean(), line_dash="dash", line_color="gray")
 
     return fig
 
 
-def create_category_ranking_chart(df: pd.DataFrame) -> go.Figure:
+def create_category_ranking_chart(df: pd.DataFrame) -> Optional[go.Figure]:
     """카테고리별 랭킹 분포"""
-    if "category" not in df.columns:
+    if df.empty or "category" not in df.columns:
         return None
 
     category_stats = df.groupby("category").agg(
@@ -189,10 +195,8 @@ def render_page():
     st.title("인기 의약품 랭킹")
     st.markdown("---")
 
-    # 가중치 설명
     st.info(f"랭킹 산출 기준: 판매량 {int(SALES_WEIGHT * 100)}% + 트렌드 {int(TREND_WEIGHT * 100)}%")
 
-    # 필터 옵션
     col1, col2, col3 = st.columns([1, 1, 1])
 
     with col1:
@@ -211,7 +215,6 @@ def render_page():
         st.session_state["ranking_top_n"] = top_n
         st.session_state["ranking_limit"] = data_limit
 
-    # 데이터 로드 및 시각화
     if st.session_state.get("ranking_data_loaded", False):
         with st.spinner("랭킹 데이터 로딩 중..."):
             data = fetch_ranking_data(
@@ -222,7 +225,6 @@ def render_page():
         if data:
             df = pd.DataFrame(data)
 
-            # 필수 컬럼 확인
             required_cols = ["product_id", "product_name"]
             missing_cols = [col for col in required_cols if col not in df.columns]
 
@@ -230,54 +232,47 @@ def render_page():
                 st.error(f"필수 필드 누락: {missing_cols}. 랭킹 파이프라인을 먼저 실행해주세요.")
                 st.stop()
 
-            # 랭킹 계산
             df = create_ranking_table(df)
             top_n_display = st.session_state.get("ranking_top_n", 20)
 
-            # 탭 구성
             tab1, tab2, tab3 = st.tabs(["전체 랭킹", "카테고리별 랭킹", "점수 분석"])
 
             with tab1:
                 st.subheader("전체 랭킹 테이블")
 
-                # 랭킹 바 차트
                 bar_fig = create_ranking_bar_chart(df, top_n_display)
-                st.plotly_chart(bar_fig, use_container_width=True)
+                if bar_fig:
+                    st.plotly_chart(bar_fig, width="stretch")
+                else:
+                    st.warning("차트를 생성할 데이터가 부족합니다.")
 
-                # 랭킹 테이블
                 display_cols = ["rank", "product_name", "category", "sales_score", "trend_score", "weighted_score"]
                 available_cols = [col for col in display_cols if col in df.columns]
+                format_dict = {
+                    col: "{:.2f}" for col in ["sales_score", "trend_score", "weighted_score"]
+                    if col in available_cols
+                }
 
                 st.dataframe(
-                    df[available_cols].head(top_n_display).style.format({
-                        "sales_score": "{:.2f}",
-                        "trend_score": "{:.2f}",
-                        "weighted_score": "{:.2f}",
-                    }),
-                    use_container_width=True,
+                    df[available_cols].head(top_n_display).style.format(format_dict),
+                    width="stretch",
                 )
 
             with tab2:
                 st.subheader("카테고리별 랭킹")
 
                 if "category" in df.columns:
-                    # 카테고리별 차트
                     cat_fig = create_category_ranking_chart(df)
                     if cat_fig:
-                        st.plotly_chart(cat_fig, use_container_width=True)
+                        st.plotly_chart(cat_fig, width="stretch")
 
-                    # 카테고리별 TOP 5
                     st.subheader("카테고리별 TOP 5")
                     for category in df["category"].unique()[:5]:
                         with st.expander(f"{category}"):
                             cat_df = df[df["category"] == category].head(5)
                             st.dataframe(
-                                cat_df[available_cols].style.format({
-                                    "sales_score": "{:.2f}",
-                                    "trend_score": "{:.2f}",
-                                    "weighted_score": "{:.2f}",
-                                }),
-                                use_container_width=True,
+                                cat_df[available_cols].style.format(format_dict),
+                                width="stretch",
                             )
                 else:
                     st.info("카테고리 정보가 없습니다.")
@@ -285,12 +280,10 @@ def render_page():
             with tab3:
                 st.subheader("점수 분석")
 
-                # 점수 비교 산점도
                 scatter_fig = create_score_comparison_chart(df, top_n_display)
                 if scatter_fig:
-                    st.plotly_chart(scatter_fig, use_container_width=True)
+                    st.plotly_chart(scatter_fig, width="stretch")
 
-                # 점수 분포 히스토그램
                 col1, col2 = st.columns(2)
 
                 with col1:
@@ -301,7 +294,7 @@ def render_page():
                             title="판매량 점수 분포",
                             nbins=20,
                         )
-                        st.plotly_chart(fig, use_container_width=True)
+                        st.plotly_chart(fig, width="stretch")
 
                 with col2:
                     if "trend_score" in df.columns:
@@ -311,9 +304,8 @@ def render_page():
                             title="트렌드 점수 분포",
                             nbins=20,
                         )
-                        st.plotly_chart(fig, use_container_width=True)
+                        st.plotly_chart(fig, width="stretch")
 
-                # 요약 통계
                 st.subheader("요약 통계")
                 col1, col2, col3, col4 = st.columns(4)
 

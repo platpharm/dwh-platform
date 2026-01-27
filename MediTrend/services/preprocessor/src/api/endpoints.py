@@ -55,27 +55,22 @@ async def preprocess_all():
     total_count = 0
 
     try:
-        # 1. 주문 데이터 전처리
         results["orders"] = order_processor.process()
         if results["orders"]["success"]:
             total_count += results["orders"].get("processed_count", 0)
 
-        # 2. 상품 데이터 전처리
         results["products"] = product_processor.process()
         if results["products"]["success"]:
             total_count += results["products"].get("processed_count", 0)
 
-        # 3. 약국 데이터 전처리
         results["accounts"] = pharmacy_processor.process()
         if results["accounts"]["success"]:
             total_count += results["accounts"].get("processed_count", 0)
 
-        # 4. 키워드 추출 및 트렌드 매핑
         results["keywords"] = keyword_extractor.process()
         if results["keywords"]["success"]:
             total_count += results["keywords"].get("mapping_count", 0)
 
-        # 전체 성공 여부 확인
         all_success = all(
             r["success"] for r in results.values() if r is not None
         )
@@ -139,10 +134,7 @@ async def preprocess_products():
     logger.info("Starting product data preprocessing")
 
     try:
-        # 상품 데이터 전처리
         product_result = product_processor.process()
-
-        # 키워드 추출 및 트렌드 매핑
         keyword_result = keyword_extractor.process()
 
         total_count = (

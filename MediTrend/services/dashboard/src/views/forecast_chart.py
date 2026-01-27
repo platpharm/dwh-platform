@@ -4,6 +4,7 @@ import pandas as pd
 import plotly.graph_objects as go
 from typing import List, Dict, Any
 from datetime import datetime, timedelta
+from elasticsearch.exceptions import NotFoundError
 
 from shared.clients.es_client import es_client
 from shared.config import ESIndex
@@ -34,6 +35,12 @@ def fetch_forecast_data(
             size=limit,
         )
         return results
+    except NotFoundError:
+        st.error(
+            f"인덱스 '{ESIndex.FORECASTING_RESULT}'가 존재하지 않습니다. "
+            "수요예측 파이프라인을 먼저 실행하여 데이터를 생성해주세요."
+        )
+        return []
     except Exception as e:
         st.error(f"데이터 조회 실패: {e}")
         return []
@@ -104,8 +111,9 @@ def create_error_metrics_chart(df: pd.DataFrame) -> go.Figure:
     if "actual" not in df.columns or "forecast" not in df.columns:
         return None
 
+    df = df.copy()
     df["error"] = df["forecast"] - df["actual"]
-    df["abs_error"] = abs(df["error"])
+    df["abs_error"] = df["error"].abs()
     df["pct_error"] = (df["abs_error"] / df["actual"].replace(0, 1)) * 100
 
     fig = go.Figure()
@@ -186,6 +194,10 @@ def render_page():
         if data:
             df = pd.DataFrame(data)
 
+            if df.empty:
+                st.info("조회된 데이터가 없습니다.")
+                st.stop()
+
             required_cols = ["date", "forecast"]
             missing_cols = [col for col in required_cols if col not in df.columns]
 
@@ -199,7 +211,7 @@ def render_page():
 
             st.subheader("시계열 예측 그래프")
             forecast_fig = create_forecast_chart(df)
-            st.plotly_chart(forecast_fig, use_container_width=True)
+            st.plotly_chart(forecast_fig, width="stretch")
 
             col1, col2 = st.columns([1, 2])
 
@@ -216,7 +228,7 @@ def render_page():
             with col2:
                 error_fig = create_error_metrics_chart(df)
                 if error_fig:
-                    st.plotly_chart(error_fig, use_container_width=True)
+                    st.plotly_chart(error_fig, width="stretch")
 
             st.subheader("예측 데이터 상세")
             with st.expander("데이터 테이블 보기"):

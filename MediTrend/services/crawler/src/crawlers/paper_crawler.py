@@ -43,7 +43,6 @@ class PaperCrawler:
         results = []
 
         for keyword in keywords:
-            # 1. 검색하여 ID 목록 가져오기
             search_params = {
                 "db": "pubmed",
                 "term": f"{keyword}[Title/Abstract]",
@@ -64,7 +63,6 @@ class PaperCrawler:
             if not id_list:
                 continue
 
-            # 2. ID로 상세 정보 가져오기
             fetch_params = {
                 "db": "pubmed",
                 "id": ",".join(id_list),
@@ -77,7 +75,6 @@ class PaperCrawler:
             )
             response.raise_for_status()
 
-            # XML 파싱
             root = ElementTree.fromstring(response.content)
 
             for article in root.findall(".//PubmedArticle"):
@@ -90,7 +87,6 @@ class PaperCrawler:
                 abstract = abstract_elem.text if abstract_elem is not None else ""
                 pmid = pmid_elem.text if pmid_elem is not None else ""
 
-                # 출판일 파싱
                 pub_date = datetime.now()
                 if pubdate_elem is not None:
                     year = pubdate_elem.find("Year")
@@ -112,7 +108,6 @@ class PaperCrawler:
                     "url": f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/",
                 })
 
-            # Rate limiting
             time.sleep(0.5)
 
         return results
@@ -144,7 +139,6 @@ class PaperCrawler:
             )
             response.raise_for_status()
 
-            # XML 파싱 (Atom 형식)
             root = ElementTree.fromstring(response.content)
             ns = {"atom": "http://www.w3.org/2005/Atom"}
 
@@ -158,7 +152,6 @@ class PaperCrawler:
                 summary = summary_elem.text.strip() if summary_elem is not None else ""
                 arxiv_id = id_elem.text if id_elem is not None else ""
 
-                # 출판일 파싱
                 pub_date = datetime.now()
                 if published_elem is not None:
                     try:
@@ -168,7 +161,6 @@ class PaperCrawler:
                     except ValueError:
                         pass
 
-                # arXiv ID 추출
                 paper_id = arxiv_id.split("/")[-1] if arxiv_id else ""
 
                 results.append({
@@ -181,7 +173,6 @@ class PaperCrawler:
                     "url": arxiv_id,
                 })
 
-            # Rate limiting
             time.sleep(0.5)
 
         return results
@@ -197,16 +188,13 @@ class PaperCrawler:
         abstract = paper.get("abstract", "").lower()
         keyword_lower = keyword.lower()
 
-        # 제목에 키워드 포함 시 가중치
         if keyword_lower in title:
             score += 50.0
 
-        # 초록에 키워드 포함 시 가중치
         if keyword_lower in abstract:
             keyword_count = abstract.count(keyword_lower)
             score += min(30.0, keyword_count * 10.0)
 
-        # 최근 논문 가중치
         pub_date = paper.get("pub_date", datetime.now())
         if isinstance(pub_date, datetime):
             days_old = (datetime.now() - pub_date).days
@@ -268,7 +256,6 @@ class PaperCrawler:
 
         trend_data_list = self._parse_to_trend_data(all_papers)
 
-        # TrendData를 dict로 변환
         documents = [
             {
                 **data.model_dump(),
@@ -277,7 +264,6 @@ class PaperCrawler:
             for data in trend_data_list
         ]
 
-        # ES에 bulk 저장
         success, _ = es_client.bulk_index(
             index=ESIndex.TREND_DATA,
             documents=documents,
@@ -286,7 +272,6 @@ class PaperCrawler:
         return success
 
 
-# 팩토리 함수 (async context manager 사용을 위해)
 def create_paper_crawler() -> PaperCrawler:
     """PaperCrawler 인스턴스 생성"""
     return PaperCrawler()

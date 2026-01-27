@@ -23,8 +23,6 @@ class ElasticsearchConfig:
         """ES hosts 리스트 반환 (URL 문자열 형식)"""
         return [self.url]
 
-
-# 인덱스 Alias 정의
 class ESIndex:
     """Elasticsearch 인덱스 Alias"""
     # CDC Source data (platpharm)
@@ -49,6 +47,4 @@ class ESIndex:
     TARGETING_RESULT = "medi-db-targeting-result"
     VECTOR_STORE = "medi-db-vectors"
 
-
-# 싱글톤 설정 인스턴스
 es_config = ElasticsearchConfig()

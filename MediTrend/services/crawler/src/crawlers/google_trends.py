@@ -96,7 +96,6 @@ class GoogleTrendsCrawler:
             interest_df = self.pytrends.interest_over_time()
 
             if not interest_df.empty:
-                # isPartial 컬럼 제거
                 if "isPartial" in interest_df.columns:
                     interest_df = interest_df.drop(columns=["isPartial"])
 
@@ -104,7 +103,6 @@ class GoogleTrendsCrawler:
                     if keyword in interest_df.columns:
                         results[keyword] = interest_df[keyword].to_dict()
 
-            # Rate limiting
             if i + 5 < len(keywords):
                 time.sleep(1)
 
@@ -149,7 +147,6 @@ class GoogleTrendsCrawler:
                         ),
                     }
 
-            # Rate limiting
             if i + 5 < len(keywords):
                 time.sleep(1)
 
@@ -165,7 +162,6 @@ class GoogleTrendsCrawler:
 
         for keyword, time_series in interest_data.items():
             for timestamp, score in time_series.items():
-                # timestamp가 pandas Timestamp인 경우 처리
                 if hasattr(timestamp, "to_pydatetime"):
                     dt = timestamp.to_pydatetime()
                 elif isinstance(timestamp, str):
@@ -175,7 +171,6 @@ class GoogleTrendsCrawler:
 
                 metadata = {"score": score}
 
-                # 연관 검색어 추가
                 related_keywords = None
                 if related_data and keyword in related_data:
                     metadata["related_queries"] = related_data[keyword]
@@ -215,7 +210,6 @@ class GoogleTrendsCrawler:
         if not trend_data_list:
             return 0
 
-        # TrendData를 dict로 변환
         documents = [
             {
                 **data.model_dump(),
@@ -224,7 +218,6 @@ class GoogleTrendsCrawler:
             for data in trend_data_list
         ]
 
-        # ES에 bulk 저장
         success, _ = es_client.bulk_index(
             index=ESIndex.TREND_DATA,
             documents=documents,
@@ -248,11 +241,9 @@ class GoogleTrendsCrawler:
         logger.info(f"Fetching top {top_n} products from CDC ES")
 
         try:
-            # CDC Product 인덱스에서 상품 조회
-            # ranking_result 인덱스가 있으면 인기순, 없으면 전체 상품 조회
             query = {"match_all": {}}
 
-            # 먼저 ranking_result 에서 인기 상품 ID 목록 조회 시도
+            # ranking_result 인덱스에서 인기 상품 조회, 없으면 CDC product에서 전체 조회
             ranking_products = []
             try:
                 ranking_query = {"match_all": {}}
@@ -271,7 +262,6 @@ class GoogleTrendsCrawler:
             if ranking_products:
                 return ranking_products
 
-            # Ranking 결과가 없으면 CDC Product 인덱스에서 직접 조회
             products = es_client.search(
                 index=ESIndex.CDC_PRODUCT,
                 query=query,
@@ -279,7 +269,6 @@ class GoogleTrendsCrawler:
                 source=["id", "name", "category2", "efficacy", "ingredient"]
             )
 
-            # 필드명 정규화
             result = []
             for p in products:
                 result.append({
@@ -310,24 +299,19 @@ class GoogleTrendsCrawler:
         if not name:
             return ""
 
-        # 괄호 내용 제거
         normalized = re.sub(r"\([^)]*\)", "", name)
-        # 숫자+단위 제거 (예: 100mg, 50ml, 10정)
         normalized = re.sub(
             r"\d+\.?\d*\s*(mg|ml|g|L|정|캡슐|포|개|mcg|iu|%)",
             "",
             normalized,
             flags=re.IGNORECASE
         )
-        # 제형 표기 제거
         normalized = re.sub(
             r"(필름코팅정|정제|캡슐|연질캡슐|시럽|액|주사|연고|크림|겔|패치|필름|과립|산제)",
             "",
             normalized
         )
-        # 특수문자 제거
         normalized = re.sub(r"[^\w\s가-힣]", "", normalized)
-        # 연속 공백 제거
         normalized = re.sub(r"\s+", " ", normalized).strip()
 
         return normalized
@@ -361,9 +345,8 @@ class GoogleTrendsCrawler:
         """
         logger.info(f"Fetching trends for {len(products)} products")
 
-        # 상품명 정규화 및 키워드 준비
-        product_keywords = {}  # normalized_name -> [product_ids]
-        product_category_map = {}  # product_id -> category_name
+        product_keywords = {}
+        product_category_map = {}
 
         for p in products:
             product_id = p.get("product_id") or p.get("id")
@@ -379,42 +362,35 @@ class GoogleTrendsCrawler:
                     product_keywords[normalized] = []
                 product_keywords[normalized].append(product_id)
 
-            # 카테고리명 저장 (대체 검색용)
             category_name = self._get_category_name(category2)
             if category_name:
                 product_category_map[product_id] = category_name
 
-        # 중복 제거된 키워드 목록
         keywords = list(product_keywords.keys())
         logger.info(f"Unique keywords to search: {len(keywords)}")
 
-        # 1차: 상품명으로 트렌드 검색
         interest_data = self.fetch_interest_over_time(
             keywords=keywords,
             start_date=start_date,
             end_date=end_date,
         )
 
-        # 검색량 낮은 상품 -> 카테고리로 대체 검색
-        product_keyword_mapping = {}  # product_id -> {keyword, is_category_fallback}
+        product_keyword_mapping = {}
         category_fallback_keywords = set()
 
         for keyword, product_ids in product_keywords.items():
             if keyword in interest_data:
-                # 평균 트렌드 값 계산
                 values = list(interest_data[keyword].values())
                 avg_value = sum(values) / len(values) if values else 0
 
                 for pid in product_ids:
                     if avg_value >= min_trend_value:
-                        # 상품명으로 충분한 트렌드 데이터
                         product_keyword_mapping[pid] = {
                             "keyword": keyword,
                             "is_category_fallback": False,
                             "avg_trend_value": avg_value,
                         }
                     else:
-                        # 트렌드 값이 낮음 -> 카테고리로 대체 필요
                         category_name = product_category_map.get(pid)
                         if category_name:
                             category_fallback_keywords.add(category_name)
@@ -425,7 +401,6 @@ class GoogleTrendsCrawler:
                                 "avg_trend_value": avg_value,
                             }
             else:
-                # 검색 결과 없음 -> 카테고리로 대체
                 for pid in product_ids:
                     category_name = product_category_map.get(pid)
                     if category_name:
@@ -437,7 +412,6 @@ class GoogleTrendsCrawler:
                             "avg_trend_value": 0,
                         }
 
-        # 2차: 카테고리명으로 추가 검색
         if category_fallback_keywords:
             logger.info(f"Fetching category fallback trends for {len(category_fallback_keywords)} categories")
             category_trends = self.fetch_interest_over_time(
@@ -470,7 +444,6 @@ class GoogleTrendsCrawler:
         """
         logger.info(f"Starting product-based trend crawling for top {top_n} products")
 
-        # 1. CDC ES에서 상품 조회
         products = self.get_top_products_from_es(top_n=top_n)
         if not products:
             logger.warning("No products found in ES")
@@ -481,20 +454,17 @@ class GoogleTrendsCrawler:
                 "message": "No products found in ES",
             }
 
-        # 2. 상품명 기반 트렌드 검색
         interest_data, product_keyword_mapping = self.fetch_product_trends(
             products=products,
             start_date=start_date,
             end_date=end_date,
         )
 
-        # 3. 연관 검색어 조회
         related_data = None
         if include_related and interest_data:
             all_keywords = list(interest_data.keys())
             related_data = self.fetch_related_queries(all_keywords)
 
-        # 4. TrendData 변환 및 저장
         trend_data_list = self._parse_trend_data(interest_data, related_data)
         trend_count = 0
         if trend_data_list:
@@ -510,10 +480,8 @@ class GoogleTrendsCrawler:
                 documents=documents,
             )
 
-        # 5. 상품-키워드 매핑 저장
         mapping_documents = []
         for product_id, mapping_info in product_keyword_mapping.items():
-            # 상품 정보 찾기
             product_info = next(
                 (p for p in products if (p.get("product_id") or p.get("id")) == product_id),
                 {}
@@ -550,5 +518,4 @@ class GoogleTrendsCrawler:
         }
 
 
-# 싱글톤 인스턴스
 google_crawler = GoogleTrendsCrawler()

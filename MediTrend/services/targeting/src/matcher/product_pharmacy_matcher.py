@@ -60,7 +60,6 @@ class ProductPharmacyMatcher:
         """
         query = {"match_all": {}}
 
-        # 랭킹 점수 순으로 정렬하여 조회
         response = self.es_client.client.search(
             index=ESIndex.RANKING_RESULT,
             body={
@@ -270,50 +269,35 @@ class ProductPharmacyMatcher:
         Returns:
             타겟팅 결과 리스트
         """
-        # 1. 클러스터링 결과 조회
         clustering_results = self.get_clustering_results()
-
-        # 2. 랭킹 결과 조회
         ranking_results = self.get_ranking_results(top_n=top_n_products)
-
-        # 3. 클러스터 매핑 구축
         product_clusters, pharmacy_clusters = self.build_cluster_mapping(
             clustering_results
         )
-
-        # 4. 랭킹 점수 맵 생성
         ranking_map = self.get_ranking_score_map(ranking_results)
 
-        # 5. 상품별 클러스터 ID 매핑
         product_to_cluster: Dict[int, int] = {}
         for result in clustering_results:
             if result.get("entity_type") == "product":
                 product_to_cluster[result["entity_id"]] = result.get("cluster_id", 0)
 
-        # 6. 약국별 클러스터 ID 매핑
         pharmacy_to_cluster: Dict[int, int] = {}
         for result in clustering_results:
             if result.get("entity_type") == "pharmacy":
                 pharmacy_to_cluster[result["entity_id"]] = result.get("cluster_id", 0)
 
-        # 7. 전체 약국 ID 수집
         all_pharmacy_ids = list(pharmacy_to_cluster.keys())
-
-        # 8. 약국 정보 조회
         pharmacy_info = self.get_pharmacy_info(all_pharmacy_ids)
 
-        # 9. 매칭 결과 생성
         targeting_results: List[TargetingResult] = []
         timestamp = datetime.now()
 
         for product_id, product_info in ranking_map.items():
             product_cluster_id = product_to_cluster.get(product_id, 0)
 
-            # 약국별 매칭 점수 계산
             pharmacy_scores: List[Tuple[int, float]] = []
 
             for pharmacy_id, pharmacy_cluster_id in pharmacy_to_cluster.items():
-                # 클러스터 친화도 계산
                 cluster_affinity = self.calculate_cluster_affinity(
                     product_cluster_id,
                     pharmacy_cluster_id,
@@ -321,10 +305,8 @@ class ProductPharmacyMatcher:
                     pharmacy_clusters
                 )
 
-                # 랭킹 점수 가중치 적용
                 ranking_weight = product_info.get("ranking_score", 50) / 100
 
-                # 벡터 결합하여 최종 매칭 점수 계산
                 match_score = self.vector_combiner.combine_scores(
                     cluster_affinity=cluster_affinity,
                     ranking_weight=ranking_weight
@@ -332,11 +314,9 @@ class ProductPharmacyMatcher:
 
                 pharmacy_scores.append((pharmacy_id, match_score))
 
-            # 점수 순 정렬 및 상위 N개 선택
             pharmacy_scores.sort(key=lambda x: x[1], reverse=True)
             top_pharmacies = pharmacy_scores[:top_n_pharmacies]
 
-            # 타겟팅 결과 생성
             product_name = product_info.get("product_name")
             if not product_name:
                 continue  # 상품명 없으면 스킵
@@ -381,7 +361,6 @@ class ProductPharmacyMatcher:
 
         documents = [result.model_dump(mode="json") for result in results]
 
-        # ISO 형식 문자열로 변환
         for doc in documents:
             if isinstance(doc.get("timestamp"), datetime):
                 doc["timestamp"] = doc["timestamp"].isoformat()
@@ -448,13 +427,11 @@ class ProductPharmacyMatcher:
         Returns:
             실행 결과 정보
         """
-        # 매칭 실행
         results = self.match_products_to_pharmacies(
             top_n_products=top_n_products,
             top_n_pharmacies=top_n_pharmacies
         )
 
-        # 결과 저장
         success_count, error_count = self.save_targeting_results(results)
 
         return {
@@ -466,5 +443,4 @@ class ProductPharmacyMatcher:
         }
 
 
-# 싱글톤 인스턴스
 product_pharmacy_matcher = ProductPharmacyMatcher()

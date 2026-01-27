@@ -11,8 +11,6 @@ app = FastAPI(
     description="의약품-약국 타겟팅 매칭 서비스",
     version="0.1.0",
 )
-
-# CORS 설정
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -20,15 +18,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# 라우터 등록
 app.include_router(router)
 
 
 @app.on_event("startup")
 async def startup_event():
     """서비스 시작 시 초기화"""
-    # ES 연결 확인
     if es_client.health_check():
         print("Elasticsearch connection established")
     else:

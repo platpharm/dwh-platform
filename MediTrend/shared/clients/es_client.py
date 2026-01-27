@@ -192,6 +192,4 @@ class ESClient:
         """인덱스 존재 여부 확인"""
         return self.client.indices.exists(index=index)
 
-
-# 싱글톤 인스턴스
 es_client = ESClient()

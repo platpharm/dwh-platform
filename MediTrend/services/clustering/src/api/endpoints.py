@@ -24,7 +24,6 @@ from ..algorithms import (
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-# 클러스터링 작업 상태 저장
 clustering_jobs: Dict[str, Dict[str, Any]] = {}
 
 
@@ -34,7 +33,6 @@ def _fetch_product_data() -> tuple:
     TREND_PRODUCT_MAPPING에서 trend_score, match_score를 조회하고
     CDC_PRODUCT에서 상품명 등 추가 정보를 조인
     """
-    # 1. TREND_PRODUCT_MAPPING에서 트렌드/매칭 스코어 조회 (scroll로 전체)
     trend_data = {}
     for p in es_client.scroll_search(
         index=ESIndex.TREND_PRODUCT_MAPPING,
@@ -50,7 +48,6 @@ def _fetch_product_data() -> tuple:
 
     logger.info(f"Loaded {len(trend_data)} products from TREND_PRODUCT_MAPPING")
 
-    # 2. CDC_PRODUCT에서 상품명, 카테고리 등 정보 조회 (scroll로 전체)
     product_info = {}
     for p in es_client.scroll_search(
         index=ESIndex.CDC_PRODUCT,
@@ -72,34 +69,28 @@ def _fetch_product_data() -> tuple:
 
     logger.info(f"Loaded {len(product_info)} products from CDC_PRODUCT")
 
-    # 3. 조인하여 특성 추출
     ids = []
     features = []
     raw_data = []
 
-    # trend_data에 있는 상품만 클러스터링 (trend_score > 0)
     for product_id, scores in trend_data.items():
         trend_score = float(scores.get("trend_score", 0))
         match_score = float(scores.get("match_score", 0))
 
-        # CDC_PRODUCT에서 상품명 조회
         info = product_info.get(product_id, {})
         product_name = info.get("product_name", "")
 
-        # 상품명이 없으면 스킵
         if not product_name:
             continue
 
         ids.append(product_id)
 
-        # 수치형 특성
         feature_vector = [
             trend_score,
             match_score,
         ]
         features.append(feature_vector)
 
-        # raw_data에 product_name 포함
         raw_data.append({
             "product_id": product_id,
             "product_name": product_name,
@@ -120,7 +111,6 @@ def _fetch_product_data() -> tuple:
 
 def _fetch_pharmacy_data() -> tuple:
     """ES에서 약국 데이터 조회 (전처리된 데이터)"""
-    # 전처리된 약국 데이터 인덱스에서 조회
     query = {"match_all": {}}
 
     try:
@@ -130,7 +120,6 @@ def _fetch_pharmacy_data() -> tuple:
             size=10000
         )
     except Exception:
-        # 인덱스가 없으면 빈 리스트 반환
         logger.warning("Preprocessed pharmacy index not found")
         return [], [], []
 
@@ -144,7 +133,6 @@ def _fetch_pharmacy_data() -> tuple:
     for p in pharmacies:
         ids.append(p.get("pharmacy_id") or p.get("account_id"))
 
-        # 약국 특성 (주문 패턴, 규모 등)
         feature_vector = [
             float(p.get("total_orders", 0)),
             float(p.get("avg_order_amount", 0)),
@@ -169,13 +157,11 @@ def _save_clustering_results(
     documents = []
 
     for i, (entity_id, result, raw) in enumerate(zip(entity_ids, cluster_results, raw_data)):
-        # entity_name 추출
-        if entity_type == "product":
+            if entity_type == "product":
             entity_name = raw.get("product_name") or raw.get("name")
         else:  # pharmacy
             entity_name = raw.get("name") or raw.get("host_name")
 
-        # entity_name이 없으면 스킵
         if not entity_name:
             continue
 
@@ -191,7 +177,6 @@ def _save_clustering_results(
         )
         documents.append(doc.model_dump())
 
-    # 기존 결과 삭제 (같은 entity_type, algorithm)
     try:
         es_client.delete_by_query(
             index=ESIndex.CLUSTERING_RESULT,
@@ -207,7 +192,6 @@ def _save_clustering_results(
     except Exception as e:
         logger.warning(f"Failed to delete old results: {e}")
 
-    # 새 결과 저장
     success, _ = es_client.bulk_index(
         index=ESIndex.CLUSTERING_RESULT,
         documents=documents
@@ -224,7 +208,6 @@ def _run_clustering(
     """클러스터링 실행 로직"""
     params = params or {}
 
-    # 데이터 조회
     if entity_type == "product":
         entity_ids, features, raw_data = _fetch_product_data()
     elif entity_type == "pharmacy":
@@ -240,7 +223,6 @@ def _run_clustering(
             "message": f"No {entity_type} data found"
         }
 
-    # 알고리즘 선택 및 실행
     if algorithm == "hdbscan":
         clusterer = HDBSCANClusterer(
             min_cluster_size=params.get("min_cluster_size", 5),
@@ -264,18 +246,15 @@ def _run_clustering(
     else:
         raise ValueError(f"Unknown algorithm: {algorithm}")
 
-    # 클러스터링 실행
     if algorithm == "k_prototype":
         categorical_indices = params.get("categorical_indices")
         clusterer.fit(features, categorical_indices)
     else:
         clusterer.fit(features)
 
-    # 결과 가져오기
     results = clusterer.get_results()
     summary = clusterer.get_cluster_summary()
 
-    # ES에 저장
     saved_count = _save_clustering_results(
         entity_type=entity_type,
         entity_ids=entity_ids,
@@ -422,7 +401,6 @@ async def get_clustering_results(
     - cluster_id: 특정 클러스터 ID (선택)
     """
     try:
-        # 쿼리 구성
         must_clauses = []
         if entity_type:
             must_clauses.append({"term": {"entity_type": entity_type}})
@@ -442,7 +420,6 @@ async def get_clustering_results(
             size=size
         )
 
-        # 클러스터별 통계
         cluster_stats = {}
         for r in results:
             cid = r.get("cluster_id", -1)

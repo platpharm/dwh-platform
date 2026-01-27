@@ -11,7 +11,6 @@ from shared.models.schemas import TrendProductMapping
 logger = logging.getLogger(__name__)
 
 
-# 카테고리2 코드 매핑
 CATEGORY2_MAPPING = {
     "01": "해열진통소염제",
     "02": "항히스타민제",
@@ -67,19 +66,15 @@ class KeywordExtractor:
             "category": [],
         }
 
-        # 상품명에서 키워드 추출
         if product.get("name"):
             keywords["name"] = self._extract_name_keywords(product["name"])
 
-        # 효능에서 키워드 추출
         if product.get("efficacy"):
             keywords["efficacy"] = self._extract_efficacy_keywords(product["efficacy"])
 
-        # 성분에서 키워드 추출
         if product.get("ingredient"):
             keywords["ingredient"] = self._extract_ingredient_keywords(product["ingredient"])
 
-        # 카테고리 키워드 추출
         if product.get("category2"):
             keywords["category"] = self._extract_category_keywords(product["category2"])
 
@@ -90,19 +85,10 @@ class KeywordExtractor:
         if not name:
             return []
 
-        # 괄호 내용 제거
         cleaned = re.sub(r"\([^)]*\)", "", name)
-
-        # 숫자+단위 제거
         cleaned = re.sub(r"\d+\.?\d*\s*(mg|ml|g|mcg|iu|정|캡슐|포|개|%)", "", cleaned, flags=re.IGNORECASE)
-
-        # 특수문자 제거 (한글, 영문만 유지)
         cleaned = re.sub(r"[^\w\s가-힣a-zA-Z]", " ", cleaned)
-
-        # 토큰화
         tokens = cleaned.split()
-
-        # 불용어 및 짧은 단어 제거
         keywords = []
         for token in tokens:
             token = token.strip().lower()
@@ -116,17 +102,14 @@ class KeywordExtractor:
         if not efficacy:
             return []
 
-        # 쉼표, 줄바꿈, 마침표로 분리
         parts = re.split(r"[,\n.·]", efficacy)
 
         keywords = []
         for part in parts:
-            # 정제
             cleaned = part.strip()
             if not cleaned:
                 continue
 
-            # 괄호 내용 제거
             cleaned = re.sub(r"\([^)]*\)", "", cleaned)
             cleaned = cleaned.strip()
 
@@ -140,13 +123,8 @@ class KeywordExtractor:
         if not ingredient:
             return []
 
-        # 괄호 내용 제거
         cleaned = re.sub(r"\([^)]*\)", "", ingredient)
-
-        # 숫자+단위 제거
         cleaned = re.sub(r"\d+\.?\d*\s*(mg|ml|g|mcg|iu|%)", "", cleaned, flags=re.IGNORECASE)
-
-        # 쉼표로 분리
         parts = re.split(r"[,·]", cleaned)
 
         keywords = []
@@ -162,7 +140,6 @@ class KeywordExtractor:
         if not category2:
             return []
 
-        # 코드를 카테고리명으로 매핑
         category_name = CATEGORY2_MAPPING.get(str(category2).zfill(2))
 
         if category_name:
@@ -195,10 +172,8 @@ class KeywordExtractor:
             (trend_score, is_direct_match): 트렌드 스코어와 직접 매칭 여부
         """
         try:
-            # 상품명 정규화 (괄호 및 용량 제거)
             normalized_name = self._normalize_product_name_for_trend(product_name)
 
-            # 상품명으로 직접 트렌드 데이터 검색 (exact match)
             query = {
                 "bool": {
                     "should": [
@@ -217,7 +192,6 @@ class KeywordExtractor:
             )
 
             if trend_data:
-                # 트렌드 값 평균 계산
                 values = [d.get("value", 0) for d in trend_data if d.get("value")]
                 if values:
                     trend_score = sum(values) / len(values)
@@ -235,14 +209,10 @@ class KeywordExtractor:
         if not name:
             return ""
 
-        # 괄호 내용 제거
         normalized = re.sub(r"\([^)]*\)", "", name)
-        # 숫자+단위 제거 (예: 100mg, 50ml)
         normalized = re.sub(r"\d+\.?\d*\s*(mg|ml|g|mcg|iu|정|캡슐|포|개|%)", "", normalized, flags=re.IGNORECASE)
-        # 제형 관련 단어 제거
         for word in ["정", "캡슐", "시럽", "액", "정제", "연질캡슐", "경질캡슐", "필름코팅정", "서방정", "장용정"]:
             normalized = normalized.replace(word, "")
-        # 연속 공백 제거
         normalized = re.sub(r"\s+", " ", normalized).strip()
 
         return normalized
@@ -270,7 +240,6 @@ class KeywordExtractor:
         best_match_type = None
         best_match_score = 0.0
 
-        # 키워드 타입별 매칭
         for match_type, keywords in product_keywords.items():
             for keyword in keywords:
                 score = self._calculate_match_score(trend_lower, keyword.lower())
@@ -278,7 +247,6 @@ class KeywordExtractor:
                     best_match_score = score
                     best_match_type = match_type
 
-        # 매칭 임계값 확인 (0.5 이상일 때만 매칭)
         if best_match_score >= 0.5 and best_match_type:
             return TrendProductMapping(
                 keyword=trend_keyword,
@@ -294,17 +262,14 @@ class KeywordExtractor:
 
     def _calculate_match_score(self, trend: str, keyword: str) -> float:
         """매칭 점수 계산"""
-        # 완전 일치
         if trend == keyword:
             return 1.0
 
-        # 포함 관계
         if trend in keyword or keyword in trend:
             shorter = min(len(trend), len(keyword))
             longer = max(len(trend), len(keyword))
             return shorter / longer
 
-        # 부분 일치 (첫 2글자 이상)
         common_prefix = 0
         for i in range(min(len(trend), len(keyword))):
             if trend[i] == keyword[i]:
@@ -365,7 +330,6 @@ class KeywordExtractor:
         start_time = datetime.now()
 
         try:
-            # 상품 데이터 조회 (CDC ES에서)
             products = self._get_products_from_cdc()
             if not products:
                 return {
@@ -376,11 +340,9 @@ class KeywordExtractor:
 
             logger.info(f"Processing {len(products)} products for trend mapping")
 
-            # 트렌드 데이터 조회 (fallback용)
             trend_data = self.get_trend_data()
             logger.info(f"Loaded {len(trend_data)} trend keywords for fallback matching")
 
-            # 상품별 키워드 추출
             product_keywords_map = {}
             for product in products:
                 keywords = self.extract_keywords(product)
@@ -389,7 +351,6 @@ class KeywordExtractor:
                     "keywords": keywords
                 }
 
-            # 트렌드-상품 매핑 (새로운 로직)
             mappings = []
             direct_match_count = 0
             fallback_match_count = 0
@@ -401,11 +362,9 @@ class KeywordExtractor:
                 if not product_name:
                     continue
 
-                # 1. 상품명으로 직접 트렌드 데이터 검색 (우선)
                 trend_score, is_direct_match = self.get_trend_score_for_product(product_name)
 
                 if is_direct_match and trend_score > 0:
-                    # 직접 매칭 성공
                     mapping = TrendProductMapping(
                         product_id=product_id,
                         product_name=product_name,
@@ -418,7 +377,6 @@ class KeywordExtractor:
                     mappings.append(mapping.model_dump())
                     direct_match_count += 1
                 else:
-                    # 2. 직접 매칭 실패 시 키워드 기반 간접 매칭 (fallback)
                     best_mapping = None
                     best_trend_score = 0.0
 
@@ -444,7 +402,6 @@ class KeywordExtractor:
                         mappings.append(best_mapping.model_dump())
                         fallback_match_count += 1
 
-            # ES에 매핑 결과 저장
             if mappings:
                 success_count, errors = self.es.bulk_index(
                     index=ESIndex.TREND_PRODUCT_MAPPING,
@@ -513,7 +470,6 @@ class KeywordExtractor:
             for ktype, kwords in keywords.items():
                 all_keywords[ktype].update(kwords)
 
-        # Set을 List로 변환
         result_keywords = {k: list(v) for k, v in all_keywords.items()}
 
         return {
@@ -525,5 +481,4 @@ class KeywordExtractor:
         }
 
 
-# 싱글톤 인스턴스
 keyword_extractor = KeywordExtractor()

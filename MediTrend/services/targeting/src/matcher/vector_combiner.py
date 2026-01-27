@@ -23,7 +23,6 @@ class VectorCombiner:
         self.ranking_weight = ranking_weight
         self.pattern_weight = pattern_weight
 
-        # 가중치 정규화
         total = self.cluster_weight + self.ranking_weight + self.pattern_weight
         self.cluster_weight /= total
         self.ranking_weight /= total
@@ -83,11 +82,9 @@ class VectorCombiner:
         if weights is None:
             weights = [1.0 / len(vectors)] * len(vectors)
         else:
-            # 정규화
             total = sum(weights)
             weights = [w / total for w in weights]
 
-        # 벡터 차원 맞추기
         max_dim = max(v.shape[0] for v in vectors)
         padded_vectors = []
 
@@ -99,7 +96,6 @@ class VectorCombiner:
             else:
                 padded_vectors.append(v)
 
-        # 가중 합
         result = np.zeros(max_dim)
         for v, w in zip(padded_vectors, weights):
             result += v * w
@@ -184,15 +180,12 @@ class VectorCombiner:
             "cluster_affinity": cluster_affinity,
         }
 
-        # 상품 특성 추가
         for key, value in product_features.items():
             target_vector[f"product_{key}"] = value
 
-        # 약국 특성 추가
         for key, value in pharmacy_features.items():
             target_vector[f"pharmacy_{key}"] = value
 
-        # 최종 매칭 점수
         target_vector["match_score"] = self.combine_scores(
             cluster_affinity=cluster_affinity,
             ranking_weight=ranking_score / 100

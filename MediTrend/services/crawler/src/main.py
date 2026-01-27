@@ -10,14 +10,12 @@ from src.api import router
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """애플리케이션 라이프사이클 관리"""
-    # Startup
     print("Crawler Service starting...")
     if es_client.health_check():
         print("Elasticsearch connection: OK")
     else:
         print("Elasticsearch connection: FAILED")
     yield
-    # Shutdown
     print("Crawler Service shutting down...")
 
 
@@ -28,7 +26,6 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# 라우터 등록
 app.include_router(router, prefix="")
 
 
