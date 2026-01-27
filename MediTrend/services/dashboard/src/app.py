@@ -21,7 +21,7 @@ page = st.sidebar.radio(
         "클러스터링 시각화",
         "수요예측 차트",
         "인기 의약품 랭킹",
-        "약국 타겟팅 지도",
+        "상품-약국 매칭",
     ],
 )
 
@@ -45,10 +45,10 @@ if page == "홈":
     - 전체/카테고리별 랭킹 테이블
     - 판매량 70% + 트렌드 30% 가중치 적용
 
-    **4. 약국 타겟팅 지도**
-    - 약국 위치 시각화
-    - 타겟 약국 하이라이트
-    - 상품별 타겟 필터링
+    **4. 상품-약국 매칭**
+    - 상품별 마케팅 대상 약국 리스트
+    - 매칭 점수 기반 약국 순위
+    - 약국별 클러스터 정보 표시
     """)
 
     # 시스템 상태
@@ -77,8 +77,8 @@ elif page == "인기 의약품 랭킹":
     from pages.ranking_view import render_page
     render_page()
 
-elif page == "약국 타겟팅 지도":
-    from pages.targeting_map import render_page
+elif page == "상품-약국 매칭":
+    from pages.targeting_dashboard import render_page
     render_page()
 
 # 푸터
