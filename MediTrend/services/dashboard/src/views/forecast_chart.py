@@ -43,7 +43,6 @@ def create_forecast_chart(df: pd.DataFrame) -> go.Figure:
     """시계열 예측 그래프 생성 (신뢰구간 포함)"""
     fig = go.Figure()
 
-    # 실제값 (있는 경우)
     if "actual" in df.columns:
         fig.add_trace(go.Scatter(
             x=df["date"],
@@ -54,7 +53,6 @@ def create_forecast_chart(df: pd.DataFrame) -> go.Figure:
             marker=dict(size=6),
         ))
 
-    # 예측값
     fig.add_trace(go.Scatter(
         x=df["date"],
         y=df["forecast"],
@@ -64,7 +62,6 @@ def create_forecast_chart(df: pd.DataFrame) -> go.Figure:
         marker=dict(size=6),
     ))
 
-    # 신뢰구간 상한
     if "upper_bound" in df.columns and "lower_bound" in df.columns:
         fig.add_trace(go.Scatter(
             x=df["date"],
@@ -75,7 +72,6 @@ def create_forecast_chart(df: pd.DataFrame) -> go.Figure:
             showlegend=False,
         ))
 
-        # 신뢰구간 하한 (채우기)
         fig.add_trace(go.Scatter(
             x=df["date"],
             y=df["lower_bound"],
@@ -143,7 +139,6 @@ def calculate_metrics(df: pd.DataFrame) -> Dict[str, float]:
     mse = ((forecast - actual) ** 2).mean()
     rmse = mse ** 0.5
 
-    # MAPE (0 제외)
     mask = actual != 0
     if mask.any():
         mape = (abs((actual[mask] - forecast[mask]) / actual[mask])).mean() * 100
@@ -163,7 +158,6 @@ def render_page():
     st.title("수요예측 차트")
     st.markdown("---")
 
-    # 필터 옵션
     col1, col2, col3 = st.columns([1, 1, 1])
 
     with col1:
@@ -181,7 +175,6 @@ def render_page():
         st.session_state["forecast_pharmacy_id"] = pharmacy_id
         st.session_state["forecast_limit"] = data_limit
 
-    # 데이터 로드 및 시각화
     if st.session_state.get("forecast_data_loaded", False):
         with st.spinner("예측 데이터 로딩 중..."):
             data = fetch_forecast_data(
@@ -193,7 +186,6 @@ def render_page():
         if data:
             df = pd.DataFrame(data)
 
-            # 필수 컬럼 확인
             required_cols = ["date", "forecast"]
             missing_cols = [col for col in required_cols if col not in df.columns]
 
@@ -201,17 +193,14 @@ def render_page():
                 st.error(f"필수 필드 누락: {missing_cols}. 수요예측 파이프라인을 먼저 실행해주세요.")
                 st.stop()
 
-            # 날짜 정렬
             if "date" in df.columns:
                 df["date"] = pd.to_datetime(df["date"])
                 df = df.sort_values("date")
 
-            # 예측 차트
             st.subheader("시계열 예측 그래프")
             forecast_fig = create_forecast_chart(df)
             st.plotly_chart(forecast_fig, use_container_width=True)
 
-            # 메트릭 표시
             col1, col2 = st.columns([1, 2])
 
             with col1:
@@ -225,19 +214,16 @@ def render_page():
                     st.info("실제값 데이터가 없어 메트릭을 계산할 수 없습니다.")
 
             with col2:
-                # 오차 분포 차트
                 error_fig = create_error_metrics_chart(df)
                 if error_fig:
                     st.plotly_chart(error_fig, use_container_width=True)
 
-            # 상세 데이터
             st.subheader("예측 데이터 상세")
             with st.expander("데이터 테이블 보기"):
                 display_cols = ["date", "actual", "forecast", "upper_bound", "lower_bound"]
                 available_cols = [col for col in display_cols if col in df.columns]
                 st.dataframe(df[available_cols], use_container_width=True)
 
-            # 요약 통계
             st.subheader("요약 통계")
             col1, col2, col3, col4 = st.columns(4)
 

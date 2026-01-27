@@ -14,7 +14,7 @@ def fetch_clustering_data(cluster_type: str = "all", limit: int = 1000) -> List[
     if cluster_type == "all":
         query = {"match_all": {}}
     else:
-        query = {"term": {"cluster_type": cluster_type}}
+        query = {"term": {"entity_type": cluster_type}}
 
     try:
         results = es_client.search(
@@ -90,7 +90,6 @@ def render_page():
     st.title("클러스터링 결과 시각화")
     st.markdown("---")
 
-    # 필터 옵션
     col1, col2 = st.columns([1, 3])
 
     with col1:
@@ -109,7 +108,6 @@ def render_page():
         if st.button("데이터 조회", type="primary"):
             st.session_state["clustering_data_loaded"] = True
 
-    # 데이터 로드 및 시각화
     if st.session_state.get("clustering_data_loaded", False):
         with st.spinner("데이터 로딩 중..."):
             data = fetch_clustering_data(cluster_type, data_limit)
@@ -117,7 +115,6 @@ def render_page():
         if data:
             df = pd.DataFrame(data)
 
-            # 필수 컬럼 확인
             required_cols = ["cluster_id", "entity_id", "entity_type"]
             missing_cols = [col for col in required_cols if col not in df.columns]
 
@@ -125,7 +122,6 @@ def render_page():
                 st.error(f"필수 필드 누락: {missing_cols}. 클러스터링 파이프라인을 먼저 실행해주세요.")
                 st.stop()
 
-            # UMAP 좌표 추출 (umap_coords 필드에서)
             if "umap_coords" in df.columns:
                 df["umap_x"] = df["umap_coords"].apply(lambda x: x[0] if x and len(x) > 0 else 0)
                 df["umap_y"] = df["umap_coords"].apply(lambda x: x[1] if x and len(x) > 1 else 0)
@@ -134,7 +130,6 @@ def render_page():
                 df["umap_x"] = 0
                 df["umap_y"] = 0
 
-            # entity_name 필드 확인 - 없으면 에러
             if "entity_name" not in df.columns:
                 if "features" in df.columns:
                     df["entity_name"] = df["features"].apply(
@@ -144,18 +139,15 @@ def render_page():
                     st.error("entity_name 필드가 없습니다. 클러스터링 파이프라인을 다시 실행해주세요.")
                     st.stop()
 
-            # entity_name이 없는 행 필터링
             df = df[df["entity_name"].notna() & (df["entity_name"] != "")]
             if df.empty:
                 st.error("유효한 entity_name이 있는 데이터가 없습니다. 클러스터링 파이프라인을 다시 실행해주세요.")
                 st.stop()
 
-            # UMAP 산점도
             st.subheader("UMAP 2D 산점도")
             umap_fig = create_umap_scatter(df)
             st.plotly_chart(umap_fig, use_container_width=True)
 
-            # 클러스터 분포
             col1, col2 = st.columns(2)
 
             with col1:
@@ -179,7 +171,6 @@ def render_page():
                 stats_df = create_cluster_stats_table(df)
                 st.dataframe(stats_df, use_container_width=True)
 
-            # 상세 데이터 테이블
             st.subheader("상세 데이터")
             with st.expander("데이터 테이블 보기"):
                 st.dataframe(df, use_container_width=True)

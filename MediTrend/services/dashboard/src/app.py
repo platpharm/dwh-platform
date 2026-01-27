@@ -1,7 +1,6 @@
 """DWH Dashboard - Streamlit 메인 애플리케이션"""
 import streamlit as st
 
-# 페이지 설정
 st.set_page_config(
     page_title="DWH Dashboard",
     page_icon="",
@@ -9,11 +8,9 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# 사이드바 네비게이션
 st.sidebar.title("DWH Dashboard")
 st.sidebar.markdown("---")
 
-# 페이지 선택
 page = st.sidebar.radio(
     "페이지 선택",
     [
@@ -25,7 +22,6 @@ page = st.sidebar.radio(
     ],
 )
 
-# 페이지 라우팅
 if page == "홈":
     st.title("DWH Analytics Dashboard")
     st.markdown("---")
@@ -51,7 +47,6 @@ if page == "홈":
     - 약국별 클러스터 정보 표시
     """)
 
-    # 시스템 상태
     st.markdown("---")
     st.subheader("시스템 상태")
 
@@ -66,21 +61,20 @@ if page == "홈":
         st.warning(f"Elasticsearch 연결 확인 불가: {e}")
 
 elif page == "클러스터링 시각화":
-    from pages.clustering_viz import render_page
+    from views.clustering_viz import render_page
     render_page()
 
 elif page == "수요예측 차트":
-    from pages.forecast_chart import render_page
+    from views.forecast_chart import render_page
     render_page()
 
 elif page == "인기 의약품 랭킹":
-    from pages.ranking_view import render_page
+    from views.ranking_view import render_page
     render_page()
 
 elif page == "상품-약국 매칭":
-    from pages.targeting_dashboard import render_page
+    from views.targeting_dashboard import render_page
     render_page()
 
-# 푸터
 st.sidebar.markdown("---")
 st.sidebar.caption("DWH Analytics Platform v1.0")
