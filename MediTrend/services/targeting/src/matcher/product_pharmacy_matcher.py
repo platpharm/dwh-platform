@@ -154,18 +154,19 @@ class ProductPharmacyMatcher:
         """
         return {
             result["product_id"]: {
-                "product_name": result.get("product_name", ""),
+                "product_name": result.get("product_name"),
                 "ranking_score": result.get("ranking_score", 0),
                 "rank": result.get("rank", 999)
             }
             for result in ranking_results
+            if result.get("product_name")  # product_name 없으면 제외
         }
 
     def get_pharmacy_info(
         self,
-        pharmacy_ids: List[int]
-    ) -> Dict[int, Dict[str, Any]]:
-        """약국 정보 조회 (클러스터링 결과에서)
+        pharmacy_ids: List
+    ) -> Dict[Any, Dict[str, Any]]:
+        """약국 정보 조회 (CDC account 데이터에서 직접)
 
         Args:
             pharmacy_ids: 약국 ID 리스트
@@ -178,29 +179,80 @@ class ProductPharmacyMatcher:
         if not pharmacy_ids:
             return pharmacy_info
 
-        query = {
+        # Convert to strings for ES query
+        pharmacy_ids_str = [str(pid) for pid in pharmacy_ids]
+
+        # First get cluster info
+        cluster_query = {
             "bool": {
                 "must": [
                     {"term": {"entity_type": "pharmacy"}},
-                    {"terms": {"entity_id": pharmacy_ids}}
+                    {"terms": {"entity_id": pharmacy_ids_str}}
                 ]
             }
         }
 
-        results = self.es_client.search(
+        cluster_results = self.es_client.search(
             index=ESIndex.CLUSTERING_RESULT,
-            query=query,
+            query=cluster_query,
             size=len(pharmacy_ids)
         )
 
-        for result in results:
-            pharmacy_id = result.get("entity_id")
-            features = result.get("features", {})
-            pharmacy_info[pharmacy_id] = {
-                "pharmacy_name": features.get("name", f"Pharmacy_{pharmacy_id}"),
-                "pharmacy_address": features.get("address", ""),
-                "cluster_id": result.get("cluster_id")
-            }
+        cluster_map = {}
+        for result in cluster_results:
+            cluster_map[str(result.get("entity_id"))] = result.get("cluster_id", 0)
+
+        # Get account info from CDC (only cu/bh roles = pharmacies)
+        try:
+            cdc_results = self.es_client.search(
+                index=ESIndex.CDC_ACCOUNT,
+                query={
+                    "bool": {
+                        "must": [
+                            {"terms": {"id": pharmacy_ids_str}},
+                            {"terms": {"role": ["CU", "BH"]}}  # 약국만 필터링 (대문자)
+                        ],
+                        "must_not": [
+                            {"exists": {"field": "deleted_at"}}
+                        ]
+                    }
+                },
+                size=len(pharmacy_ids)
+            )
+
+            for result in cdc_results:
+                pharmacy_id = result.get("id")
+                address_parts = [
+                    result.get("address1", ""),
+                    result.get("address2", ""),
+                    result.get("address3", "")
+                ]
+                full_address = " ".join(filter(None, address_parts))
+
+                # 약국명 우선 (host_name), 없으면 개인명 (name)
+                pharmacy_name = result.get("host_name") or result.get("name")
+                if not pharmacy_name:
+                    continue  # 이름 없는 약국 스킵
+                pharmacy_info[pharmacy_id] = {
+                    "pharmacy_name": pharmacy_name,
+                    "pharmacy_address": full_address,
+                    "region": result.get("region", ""),
+                    "city": result.get("city", ""),
+                    "cluster_id": cluster_map.get(str(pharmacy_id), 0)
+                }
+        except Exception as e:
+            # Fallback to clustering features
+            for result in cluster_results:
+                pharmacy_id = result.get("entity_id")
+                features = result.get("features", {})
+                pharmacy_name = features.get("name")
+                if not pharmacy_name:
+                    continue  # 이름 없는 약국 스킵
+                pharmacy_info[pharmacy_id] = {
+                    "pharmacy_name": pharmacy_name,
+                    "pharmacy_address": features.get("address", ""),
+                    "cluster_id": result.get("cluster_id", 0)
+                }
 
         return pharmacy_info
 
@@ -285,14 +337,21 @@ class ProductPharmacyMatcher:
             top_pharmacies = pharmacy_scores[:top_n_pharmacies]
 
             # 타겟팅 결과 생성
+            product_name = product_info.get("product_name")
+            if not product_name:
+                continue  # 상품명 없으면 스킵
+
             for pharmacy_id, match_score in top_pharmacies:
                 info = pharmacy_info.get(pharmacy_id, {})
+                pharmacy_name = info.get("pharmacy_name")
+                if not pharmacy_name:
+                    continue  # 약국명 없으면 스킵
 
                 result = TargetingResult(
                     product_id=product_id,
-                    product_name=product_info.get("product_name", f"Product_{product_id}"),
+                    product_name=product_name,
                     pharmacy_id=pharmacy_id,
-                    pharmacy_name=info.get("pharmacy_name", f"Pharmacy_{pharmacy_id}"),
+                    pharmacy_name=pharmacy_name,
                     pharmacy_address=info.get("pharmacy_address"),
                     match_score=round(match_score, 4),
                     product_cluster_id=product_cluster_id,
