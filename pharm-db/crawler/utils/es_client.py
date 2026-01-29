@@ -37,17 +37,23 @@ class ElasticsearchClient:
         es_config = CONFIG.get("elasticsearch", {})
         self._host = host or es_config.get("host", "localhost")
         self._port = port or es_config.get("port", 54321)
+        self._user = es_config.get("user", "elastic")
+        self._password = es_config.get("password", "")
         self._client: Optional[Elasticsearch] = None
 
     def _connect(self) -> Elasticsearch:
         """Elasticsearch 연결 생성"""
-        return Elasticsearch(
-            hosts=[{"host": self._host, "port": self._port, "scheme": "https"}],
-            verify_certs=False,
-            request_timeout=30,
-            max_retries=3,
-            retry_on_timeout=True,
-        )
+        kwargs: Dict[str, Any] = {
+            "hosts": [{"host": self._host, "port": self._port, "scheme": "https"}],
+            "verify_certs": False,
+            "ssl_show_warn": False,
+            "request_timeout": 30,
+            "max_retries": 3,
+            "retry_on_timeout": True,
+        }
+        if self._user and self._password:
+            kwargs["basic_auth"] = (self._user, self._password)
+        return Elasticsearch(**kwargs)
 
     def get_client(self) -> Elasticsearch:
         """

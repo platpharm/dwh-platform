@@ -6,10 +6,11 @@
 API 정보:
 - 서비스명: 전국 병·의원 찾기 서비스 / 중앙응급의료센터 응급의료정보 서비스
 - 공공데이터 PK: 15000736 (병원), 15000563 (응급)
-- Base URL: http://apis.data.go.kr/B552657/HsptlMdcncListInfoInqireService
+- Base URL: http://apis.data.go.kr/B552657/HsptlAsembySearchService
 - 응급 API: http://apis.data.go.kr/B552657/ErmctInfoInqireService
 """
 
+import xml.etree.ElementTree as ET
 from typing import Any, Dict, List, Optional
 from datetime import datetime
 
@@ -40,7 +41,7 @@ class HospitalNICCollector(BaseCollector):
     - 응급의료기관 정보 (응급실 전화, 가용 병상 등)
     """
 
-    BASE_URL = "http://apis.data.go.kr/B552657/HsptlMdcncListInfoInqireService"
+    BASE_URL = "http://apis.data.go.kr/B552657/HsptlAsembySearchService"
     EMERGENCY_BASE_URL = "http://apis.data.go.kr/B552657/ErmctInfoInqireService"
     ENDPOINT_LIST = "/getHsptlMdcncListInfoInqire"
     ENDPOINT_EMERGENCY_LIST = "/getEgytListInfoInqire"
@@ -120,11 +121,7 @@ class HospitalNICCollector(BaseCollector):
             if response is None:
                 break
 
-            json_data = self._parse_json_response(response)
-            if json_data is None:
-                break
-
-            items = self.extract_items(json_data)
+            items, total_count = self._parse_xml_items(response.text)
             if not items:
                 break
 
@@ -137,7 +134,6 @@ class HospitalNICCollector(BaseCollector):
                     self.logger.warning(f"데이터 변환 오류: {e}")
                     self._error_count += 1
 
-            total_count = self.extract_total_count(json_data)
             if total_count and page_no * num_of_rows >= total_count:
                 break
 
@@ -171,11 +167,7 @@ class HospitalNICCollector(BaseCollector):
                 if response is None:
                     break
 
-                json_data = self._parse_json_response(response)
-                if json_data is None:
-                    break
-
-                items = self.extract_items(json_data)
+                items, total_count = self._parse_xml_items(response.text)
                 if not items:
                     break
 
@@ -190,7 +182,6 @@ class HospitalNICCollector(BaseCollector):
                             "emergency_grade": item.get("dgidIdName"),
                         }
 
-                total_count = self.extract_total_count(json_data)
                 if total_count and page_no * num_of_rows >= total_count:
                     break
 
@@ -361,6 +352,36 @@ class HospitalNICCollector(BaseCollector):
         elif code1:
             return code1
         return None
+
+    def _parse_xml_items(self, xml_text: str):
+        """
+        XML 응답에서 items와 totalCount를 추출
+
+        Returns:
+            (items 리스트, totalCount)
+        """
+        try:
+            root = ET.fromstring(xml_text)
+        except ET.ParseError as e:
+            self.logger.error(f"XML 파싱 실패: {e}")
+            return [], None
+
+        result_code = root.findtext(".//resultCode")
+        if result_code and result_code != "00":
+            self.logger.warning(f"API 응답 에러: resultCode={result_code}")
+            return [], None
+
+        total_count_text = root.findtext(".//totalCount")
+        total_count = int(total_count_text) if total_count_text else None
+
+        items = []
+        for item_el in root.findall(".//item"):
+            item_dict = {}
+            for child in item_el:
+                item_dict[child.tag] = child.text
+            items.append(item_dict)
+
+        return items, total_count
 
     def _safe_float(self, value: Any) -> Optional[float]:
         """

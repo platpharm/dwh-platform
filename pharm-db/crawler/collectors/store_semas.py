@@ -3,7 +3,7 @@
 
 데이터 소스: 소상공인시장진흥공단_상가(상권)정보
 공공데이터 PK: 15012005
-Base URL: http://apis.data.go.kr/B553077/api/open/sdsc
+Base URL: https://apis.data.go.kr/B553077/api/open/sdsc2
 엔드포인트: /storeListInDong (행정동별 상가)
 
 약국 관련 업종으로 필터링하여 수집합니다.
@@ -24,24 +24,32 @@ class StoreSEMASCollector(BaseCollector):
     """
 
     ES_INDEX = "store_semas"
-    BASE_URL = "http://apis.data.go.kr/B553077/api/open/sdsc"
+    BASE_URL = "https://apis.data.go.kr/B553077/api/open/sdsc2"
     DEFAULT_NUM_OF_ROWS = 1000
 
-    # 약국 관련 업종 필터링 코드
-    # 대분류: Q (소매)
-    # 중분류: Q01 (소매 > 음식료품), Q16 (소매 > 의료/건강)
-    # 소분류: Q16001 (의약품/의료용품), Q16002 (건강보조식품) 등
-    PHARMACY_INDUSTRY_CODES = {
-        # 대분류 코드
-        "large": ["Q"],  # 소매
-        # 중분류 코드 - 의료/건강 관련
-        "medium": ["Q16"],  # 의료/건강
-        # 소분류 코드 - 의약품/의료용품
-        "small": [
-            "Q16001",  # 의약품/의료용품
-            "Q16002",  # 건강보조식품
-        ]
+    CTPRVN_CODES = [
+        "11", "21", "22", "23", "24", "25", "26", "29",
+        "31", "32", "33", "34", "35", "36", "37", "38", "39",
+    ]
+
+    CTPRVN_NAMES = {
+        "11": "서울", "21": "부산", "22": "대구", "23": "인천",
+        "24": "광주", "25": "대전", "26": "울산", "29": "세종",
+        "31": "경기", "32": "강원", "33": "충북", "34": "충남",
+        "35": "전북", "36": "전남", "37": "경북", "38": "경남",
+        "39": "제주",
     }
+
+    PHARMACY_INDUSTRY_CODES = {
+        "large": ["Q1", "G2"],
+        "medium": ["Q101", "Q102", "Q103", "Q104", "G215"],
+        "small": [],
+    }
+
+    COLLECT_TARGETS = [
+        {"divId": "indsLclsCd", "key": "Q1", "label": "보건의료"},
+        {"divId": "indsMclsCd", "key": "G215", "label": "의약·화장품 소매"},
+    ]
 
     def __init__(self):
         """StoreSEMASCollector 초기화"""
@@ -290,9 +298,8 @@ class StoreSEMASCollector(BaseCollector):
         """
         inds_lcls_cd = item.get("indsLclsCd", "")
         inds_mcls_cd = item.get("indsMclsCd", "")
-        inds_scls_cd = item.get("indsSclsCd", "")
 
-        if inds_scls_cd in self.PHARMACY_INDUSTRY_CODES["small"]:
+        if inds_lcls_cd in self.PHARMACY_INDUSTRY_CODES["large"]:
             return True
 
         if inds_mcls_cd in self.PHARMACY_INDUSTRY_CODES["medium"]:
@@ -497,11 +504,10 @@ class StoreSEMASCollector(BaseCollector):
 
     def collect(self) -> List[Dict[str, Any]]:
         """
-        전체 상가 데이터 수집 (기본 구현)
+        전체 상가 데이터 수집
 
-        기본적으로 의료/건강 업종(Q16)을 전국에서 수집합니다.
-        대량 데이터의 경우 collect_by_dong() 또는 collect_by_radius()를
-        사용하여 특정 지역만 수집하는 것을 권장합니다.
+        storeListInUpjong API를 사용하여 보건의료(Q1) 및
+        의약·화장품 소매(G215) 업종을 전국에서 수집합니다.
 
         Returns:
             수집된 상가 목록
@@ -509,62 +515,95 @@ class StoreSEMASCollector(BaseCollector):
         self.logger.info("소상공인진흥공단 상가 데이터 수집 시작")
 
         all_items = []
+        collected_ids = set()
+
+        for target in self.COLLECT_TARGETS:
+            label = target["label"]
+            self.logger.info(f"[{label}] 수집 시작")
+
+            target_items = self._collect_by_upjong(
+                div_id=target["divId"],
+                key=target["key"],
+            )
+
+            new_items = []
+            for item in target_items:
+                bizes_id = item.get("bizesId")
+                if bizes_id and bizes_id not in collected_ids:
+                    collected_ids.add(bizes_id)
+                    new_items.append(item)
+
+            all_items.extend(new_items)
+
+            self.logger.info(
+                f"[{label}] 수집 완료: {len(new_items)}건 "
+                f"(누적: {len(all_items)}건)"
+            )
+
+        self.logger.info(f"전국 수집 완료: 총 {len(all_items)}건")
+        return all_items
+
+    def _collect_by_upjong(
+        self,
+        div_id: str,
+        key: str,
+    ) -> List[Dict[str, Any]]:
+        """
+        업종별 상가 수집 (storeListInUpjong)
+
+        Args:
+            div_id: 업종 구분 (indsLclsCd, indsMclsCd 등)
+            key: 업종 코드
+
+        Returns:
+            수집된 상가 목록
+        """
+        items = []
         page_no = 1
-        has_more = True
+        url = f"{self.BASE_URL}/storeListInUpjong"
 
-        # 전국 단위 수집을 위해 행정동 기반이 아닌 업종 기반으로 조회
-        # 참고: 전국 조회는 divId 없이 업종코드만으로는 불가능할 수 있음
-        # 실제 사용 시에는 collect_by_dong()으로 특정 지역 지정 필요
-
-        url = f"{self.BASE_URL}/storeListByUpjong"
-
-        while has_more:
+        while True:
             params = {
                 "serviceKey": self.service_key,
-                "indsMclsCd": "Q16",  # 의료/건강 중분류
+                "divId": div_id,
+                "key": key,
                 "pageNo": page_no,
                 "numOfRows": self.DEFAULT_NUM_OF_ROWS,
-                "type": "json"
+                "type": "json",
             }
 
             response = self._make_request(url, params=params)
 
             if response is None:
-                self.logger.warning("업종별 상가 조회 실패")
                 break
 
             response_data = self._parse_json_response(response)
             if response_data is None:
                 break
 
-            items = self._extract_items_from_response(response_data)
+            page_items = self._extract_items_from_response(response_data)
 
-            if not items:
-                has_more = False
-                continue
+            if not page_items:
+                break
 
-            # 필터링 및 정규화
-            for item in items:
-                if self._is_pharmacy_related(item):
-                    normalized = self._normalize_item(item)
-                    all_items.append(normalized)
+            for item in page_items:
+                normalized = self._normalize_item(item)
+                items.append(normalized)
 
-            # 페이지네이션 확인
             total_count = self._get_total_count(response_data)
             current_count = page_no * self.DEFAULT_NUM_OF_ROWS
 
             self.logger.info(
-                f"페이지 {page_no} 수집 완료: {len(items)}건 "
-                f"(누적: {len(all_items)}건, 전체: {total_count}건)"
+                f"페이지 {page_no} 수집: {len(page_items)}건 "
+                f"(누적: {len(items)}건, 전체: {total_count}건)"
             )
 
             if current_count >= total_count:
-                has_more = False
-            else:
-                page_no += 1
+                break
 
-        self.logger.info(f"수집 완료: 총 {len(all_items)}건")
-        return all_items
+            page_no += 1
+
+        return items
 
     def run(self, save_to_es: bool = True) -> List[Dict[str, Any]]:
         """

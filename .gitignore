@@ -325,3 +325,5 @@ PLAN.md
 PLAN-*.md
 PIPELINE_REVIEW.md
 jobs.yaml
+
+pharm-db/excel/*

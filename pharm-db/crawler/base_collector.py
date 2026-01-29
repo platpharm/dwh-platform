@@ -292,7 +292,7 @@ class BaseCollector(ABC):
         id_field: str = None,
     ) -> dict:
         """
-        Elasticsearch에 데이터 저장.
+        Elasticsearch에 데이터 저장 (Bulk API 사용).
 
         Args:
             data: 저장할 데이터 리스트.
@@ -306,49 +306,26 @@ class BaseCollector(ABC):
             self.logger.warning("저장할 데이터가 없습니다.")
             return {"success": 0, "failed": 0}
 
+        from .utils.es_client import ElasticsearchClient
+
         index_name = index_name or self.es_index
-        es_url = f"https://{config.ES_HOST}:{config.ES_PORT}"
-        success_count = 0
-        failed_count = 0
 
         self.logger.info(f"Elasticsearch 저장 시작: {len(data)}건 -> {index_name}")
 
-        for item in data:
-            try:
-                if id_field and id_field in item:
-                    doc_id = item[id_field]
-                    url = f"{es_url}/{index_name}/_doc/{doc_id}"
-                    response = self.session.put(
-                        url,
-                        json=item,
-                        timeout=config.DEFAULT_TIMEOUT,
-                    )
-                else:
-                    url = f"{es_url}/{index_name}/_doc"
-                    response = self.session.post(
-                        url,
-                        json=item,
-                        timeout=config.DEFAULT_TIMEOUT,
-                    )
-
-                if response.status_code in [200, 201]:
-                    success_count += 1
-                else:
-                    failed_count += 1
-                    self.logger.warning(
-                        f"ES 저장 실패: status={response.status_code}, "
-                        f"response={response.text[:200]}"
-                    )
-
-            except requests.RequestException as e:
-                failed_count += 1
-                self.logger.error(f"ES 저장 중 오류 발생: {e}")
+        with ElasticsearchClient() as es:
+            es.create_index_if_not_exists(index_name)
+            result = es.bulk_index(
+                index_name=index_name,
+                documents=data,
+                id_field=id_field,
+                raise_on_error=False,
+            )
 
         self.logger.info(
-            f"Elasticsearch 저장 완료: 성공={success_count}, 실패={failed_count}"
+            f"Elasticsearch 저장 완료: 성공={result['success']}, 실패={result['failed']}"
         )
 
-        return {"success": success_count, "failed": failed_count}
+        return {"success": result["success"], "failed": result["failed"]}
 
     def _make_request(
         self,
