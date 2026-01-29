@@ -56,9 +56,8 @@ class HealthStatCollector(BaseCollector):
 
     def __init__(self):
         """HealthStatCollector 초기화"""
-        super().__init__(name="HealthStatCollector")
+        super().__init__(name="HealthStatCollector", index_name="health_stat")
         self.service_key = CONFIG["data_go_kr"]["service_key"]
-        self.es_index = "health_stat"
 
         if not self.service_key:
             self.logger.warning(

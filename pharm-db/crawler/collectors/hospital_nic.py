@@ -397,6 +397,40 @@ class HospitalNICCollector(BaseCollector):
         """
         return self._collect_by_sido(sido, sigungu)
 
+    def run(self) -> Dict[str, Any]:
+        """
+        수집기 실행 (수집 -> ES 저장)
+
+        Returns:
+            실행 결과 통계
+        """
+        start_time = datetime.now()
+
+        data = self.collect()
+
+        save_result = self.save_to_es(
+            data=data,
+            index_name=ES_INDICES.get("hospital_nic", "hospital_nic"),
+            id_field="hpid"
+        )
+
+        end_time = datetime.now()
+        elapsed_time = (end_time - start_time).total_seconds()
+
+        result = {
+            "collector": self.name,
+            "index": ES_INDICES.get("hospital_nic", "hospital_nic"),
+            "total_collected": len(data),
+            "es_success": save_result["success"],
+            "es_failed": save_result["failed"],
+            "elapsed_seconds": elapsed_time,
+            "started_at": start_time.isoformat(),
+            "finished_at": end_time.isoformat(),
+        }
+
+        self.logger.info(f"실행 결과: {result}")
+        return result
+
     def collect_emergency_only(self) -> List[Dict[str, Any]]:
         """
         응급의료기관만 수집

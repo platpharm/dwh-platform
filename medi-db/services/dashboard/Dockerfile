@@ -20,6 +20,7 @@ COPY services/dashboard/src/ /app/src/
 
 # Set Python path to include shared modules
 ENV PYTHONPATH=/app
+ENV PYTHONUNBUFFERED=1
 
 # Expose Streamlit port
 EXPOSE 8501

@@ -4,7 +4,7 @@ uvicorn[standard]>=0.27.0
 pydantic>=2.5.0
 
 # Elasticsearch
-elasticsearch>=8.11.0
+elasticsearch>=8.11.0,<10.0.0
 
 # Clustering & ML (let pip resolve compatible versions)
 scikit-learn>=1.6.0

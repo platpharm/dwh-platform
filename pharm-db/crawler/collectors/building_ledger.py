@@ -533,7 +533,7 @@ class BuildingLedgerCollector(BaseCollector):
         self,
         bld_mng_nos: List[str] = None,
         save_to_es: bool = True
-    ) -> Dict[str, int]:
+    ) -> Dict[str, Any]:
         """
         수집 및 Elasticsearch 저장 실행
 
@@ -542,16 +542,25 @@ class BuildingLedgerCollector(BaseCollector):
             save_to_es: Elasticsearch에 저장할지 여부
 
         Returns:
-            저장 결과 통계 (success, failed 카운트)
+            실행 결과 통계
         """
         self.logger.info("BuildingLedgerCollector 실행 시작")
 
         if not bld_mng_nos:
             self.logger.warning(
-                "건물관리번호 목록이 제공되지 않았습니다. "
-                "상가 데이터의 bldMngNo를 사용하세요."
+                "건물관리번호(bldMngNo) 목록이 제공되지 않았습니다. "
+                "건축물대장 수집기는 상가 데이터의 bldMngNo 목록을 "
+                "입력으로 받아야 합니다. "
+                "collect_by_bld_mng_nos() 메서드를 직접 호출하거나 "
+                "run(bld_mng_nos=[...])로 실행하세요."
             )
-            return {"success": 0, "failed": 0}
+            return {
+                "collector": self.name,
+                "total_collected": 0,
+                "success": 0,
+                "failed": 0,
+                "message": "bldMngNo 목록이 필요합니다. 독립 실행이 불가능한 수집기입니다.",
+            }
 
         buildings = self.collect_by_bld_mng_nos(bld_mng_nos)
 

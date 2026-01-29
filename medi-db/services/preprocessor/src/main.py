@@ -1,4 +1,5 @@
 import logging
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -10,10 +11,17 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    logger.info("MediDB Preprocessor Service started")
+    yield
+    logger.info("MediDB Preprocessor Service stopped")
+
 app = FastAPI(
     title="MediDB Preprocessor Service",
     description="의약품 데이터 전처리 및 키워드 추출 서비스",
     version="1.0.0",
+    lifespan=lifespan,
 )
 
 app.add_middleware(
@@ -25,11 +33,3 @@ app.add_middleware(
 )
 
 app.include_router(router)
-
-@app.on_event("startup")
-async def startup_event():
-    logger.info("MediDB Preprocessor Service started")
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    logger.info("MediDB Preprocessor Service stopped")

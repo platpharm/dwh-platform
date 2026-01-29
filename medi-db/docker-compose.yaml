@@ -49,6 +49,11 @@ services:
           --lastname User \
           --role Admin \
           --email admin@example.com || true
+        airflow connections add 'crawler_service' --conn-type 'http' --conn-host 'crawler' --conn-port '8000' || true
+        airflow connections add 'preprocessor_service' --conn-type 'http' --conn-host 'preprocessor' --conn-port '8000' || true
+        airflow connections add 'clustering_service' --conn-type 'http' --conn-host 'clustering' --conn-port '8000' || true
+        airflow connections add 'forecasting_service' --conn-type 'http' --conn-host 'forecasting' --conn-port '8000' || true
+        airflow connections add 'targeting_service' --conn-type 'http' --conn-host 'targeting' --conn-port '8000' || true
 
   airflow-webserver:
     image: apache/airflow:2.7.0

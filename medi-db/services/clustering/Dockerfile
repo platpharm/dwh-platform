@@ -34,6 +34,7 @@ COPY services/clustering/src/ /app/src/
 
 # Set Python path for shared modules
 ENV PYTHONPATH=/app
+ENV PYTHONUNBUFFERED=1
 
 # Expose port
 EXPOSE 8000

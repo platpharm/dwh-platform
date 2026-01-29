@@ -4,7 +4,7 @@ uvicorn==0.27.0
 pydantic==2.5.3
 
 # Elasticsearch
-elasticsearch==8.11.1
+elasticsearch>=8.11.0,<10.0.0
 
 # 크롤링 라이브러리
 httpx==0.26.0
