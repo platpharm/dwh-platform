@@ -1,4 +1,3 @@
-"""클러스터링 결과 시각화 페이지"""
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -8,9 +7,7 @@ from typing import List, Dict, Any
 from shared.clients.es_client import es_client
 from shared.config import ESIndex
 
-
 def fetch_clustering_data(cluster_type: str = "all", limit: int = 1000) -> List[Dict[str, Any]]:
-    """ES에서 클러스터링 결과 조회"""
     if cluster_type == "all":
         query = {"match_all": {}}
     else:
@@ -27,9 +24,7 @@ def fetch_clustering_data(cluster_type: str = "all", limit: int = 1000) -> List[
         st.error(f"데이터 조회 실패: {e}")
         return []
 
-
 def create_umap_scatter(df: pd.DataFrame) -> go.Figure:
-    """UMAP 2D 산점도 생성"""
     fig = px.scatter(
         df,
         x="umap_x",
@@ -51,9 +46,7 @@ def create_umap_scatter(df: pd.DataFrame) -> go.Figure:
 
     return fig
 
-
 def create_cluster_distribution(df: pd.DataFrame, group_by: str) -> go.Figure:
-    """클러스터별 분포 차트 생성"""
     distribution = df.groupby(["cluster_id", group_by]).size().reset_index(name="count")
 
     fig = px.bar(
@@ -73,9 +66,7 @@ def create_cluster_distribution(df: pd.DataFrame, group_by: str) -> go.Figure:
 
     return fig
 
-
 def create_cluster_stats_table(df: pd.DataFrame) -> pd.DataFrame:
-    """클러스터별 통계 테이블 생성"""
     agg_dict = {"entity_id": ("entity_id", "count")}
     if "score" in df.columns:
         agg_dict["avg_score"] = ("score", "mean")
@@ -88,9 +79,7 @@ def create_cluster_stats_table(df: pd.DataFrame) -> pd.DataFrame:
         stats.columns = ["클러스터 ID", "항목 수"]
     return stats
 
-
 def render_page():
-    """클러스터링 시각화 페이지 렌더링"""
     st.title("클러스터링 결과 시각화")
     st.markdown("---")
 
@@ -142,7 +131,6 @@ def render_page():
                 else:
                     df["entity_name"] = None
 
-            # entity_name이 없는 행은 entity_id로 대체
             df["entity_name"] = df["entity_name"].fillna(df["entity_id"].astype(str))
             df.loc[df["entity_name"] == "", "entity_name"] = df.loc[df["entity_name"] == "", "entity_id"].astype(str)
 
@@ -185,7 +173,6 @@ def render_page():
             st.info("조회된 데이터가 없습니다. ES 인덱스를 확인해주세요.")
     else:
         st.info("'데이터 조회' 버튼을 클릭하여 클러스터링 결과를 확인하세요.")
-
 
 if __name__ == "__main__":
     render_page()

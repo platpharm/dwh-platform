@@ -1,4 +1,3 @@
-"""상품-약국 매칭 대시보드 페이지"""
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -9,9 +8,7 @@ from elasticsearch.exceptions import NotFoundError
 from shared.clients.es_client import es_client
 from shared.config import ESIndex
 
-
 def fetch_products() -> List[Dict[str, str]]:
-    """TARGETING_RESULT에서 상품 목록 조회 (중복 제거)"""
     try:
         response = es_client.client.search(
             index=ESIndex.TARGETING_RESULT,
@@ -56,13 +53,11 @@ def fetch_products() -> List[Dict[str, str]]:
         st.error(f"상품 목록 조회 실패: {e}")
         return []
 
-
 def fetch_matching_pharmacies(
     product_id: str,
     limit: int = 100,
     min_score: float = 0.0
 ) -> List[Dict[str, Any]]:
-    """선택한 상품에 대한 추천 약국 리스트 조회 (match_score 높은 순)"""
     try:
         query = {
             "bool": {
@@ -97,9 +92,7 @@ def fetch_matching_pharmacies(
         st.error(f"약국 데이터 조회 실패: {e}")
         return []
 
-
 def fetch_product_summary(product_id: str) -> Dict[str, Any]:
-    """상품별 타겟팅 요약 통계"""
     try:
         response = es_client.client.search(
             index=ESIndex.TARGETING_RESULT,
@@ -138,9 +131,7 @@ def fetch_product_summary(product_id: str) -> Dict[str, Any]:
         st.error(f"통계 조회 실패: {e}")
         return {}
 
-
 def create_score_distribution_chart(df: pd.DataFrame) -> px.histogram:
-    """매칭 점수 분포 히스토그램"""
     if "match_score" not in df.columns:
         return None
 
@@ -161,9 +152,7 @@ def create_score_distribution_chart(df: pd.DataFrame) -> px.histogram:
 
     return fig
 
-
 def create_cluster_distribution_chart(df: pd.DataFrame) -> px.bar:
-    """클러스터별 약국 분포"""
     cluster_col = None
     for col in ["pharmacy_cluster_id", "cluster_id", "cluster", "pharmacy_cluster"]:
         if col in df.columns:
@@ -190,14 +179,11 @@ def create_cluster_distribution_chart(df: pd.DataFrame) -> px.bar:
 
     return fig
 
-
 def render_page():
-    """상품-약국 매칭 대시보드 페이지 렌더링"""
     st.title("상품-약국 매칭 대시보드")
     st.markdown("상품을 선택하면 마케팅 대상 약국 리스트를 확인할 수 있습니다.")
     st.markdown("---")
 
-    # 상품 목록 조회
     products = fetch_products()
 
     if not products:
@@ -205,7 +191,6 @@ def render_page():
         st.info("Airflow DAG `medi_db_main_pipeline`을 실행하거나, Targeting 서비스를 수동으로 호출하세요.")
         return
 
-    # 상품 선택 드롭다운
     col1, col2, col3 = st.columns([3, 1, 1])
 
     with col1:
@@ -238,7 +223,6 @@ def render_page():
 
     st.markdown("---")
 
-    # 요약 통계
     summary = fetch_product_summary(selected_product_id)
 
     if summary:
@@ -260,7 +244,6 @@ def render_page():
 
     st.markdown("---")
 
-    # 약국 리스트 조회
     pharmacies = fetch_matching_pharmacies(
         product_id=selected_product_id,
         limit=display_limit,
@@ -273,7 +256,6 @@ def render_page():
 
     df = pd.DataFrame(pharmacies)
 
-    # 차트 영역
     chart_col1, chart_col2 = st.columns(2)
 
     with chart_col1:
@@ -290,24 +272,19 @@ def render_page():
 
     st.markdown("---")
 
-    # 약국 리스트 테이블
     st.subheader(f"추천 약국 리스트 (상위 {len(df)}개, 매칭 점수순)")
 
-    # 표시할 컬럼 선택
     display_columns = []
     column_config = {}
 
-    # 순위 컬럼 추가
     df = df.reset_index(drop=True)
     df.insert(0, "순위", range(1, len(df) + 1))
     display_columns.append("순위")
 
-    # 약국명
     if "pharmacy_name" in df.columns:
         display_columns.append("pharmacy_name")
         column_config["pharmacy_name"] = st.column_config.TextColumn("약국명", width="medium")
 
-    # 매칭 점수
     if "match_score" in df.columns:
         display_columns.append("match_score")
         column_config["match_score"] = st.column_config.ProgressColumn(
@@ -317,7 +294,6 @@ def render_page():
             max_value=1,
         )
 
-    # 랭킹 점수
     if "ranking_score" in df.columns:
         display_columns.append("ranking_score")
         column_config["ranking_score"] = st.column_config.NumberColumn(
@@ -325,14 +301,12 @@ def render_page():
             format="%.2f",
         )
 
-    # 클러스터 정보
     for cluster_col in ["pharmacy_cluster_id", "cluster_id", "cluster", "pharmacy_cluster"]:
         if cluster_col in df.columns:
             display_columns.append(cluster_col)
             column_config[cluster_col] = st.column_config.TextColumn("클러스터", width="small")
             break
 
-    # 추가 정보 (있는 경우)
     optional_cols = ["region", "pharmacy_address", "address", "pharmacy_id"]
     for col in optional_cols:
         if col in df.columns:
@@ -344,7 +318,6 @@ def render_page():
             elif col == "pharmacy_id":
                 column_config[col] = st.column_config.TextColumn("약국 ID", width="small")
 
-    # 데이터프레임 표시
     st.dataframe(
         df[display_columns],
         column_config=column_config,
@@ -353,10 +326,8 @@ def render_page():
         height=500
     )
 
-    # 다운로드 버튼
     st.markdown("---")
 
-    # 전체 데이터 다운로드
     csv_all = df.to_csv(index=False, encoding="utf-8-sig")
     st.download_button(
         label="전체 목록 다운로드 (CSV)",
@@ -364,7 +335,6 @@ def render_page():
         file_name=f"matching_pharmacies_{selected_product_id}.csv",
         mime="text/csv",
     )
-
 
 if __name__ == "__main__":
     render_page()

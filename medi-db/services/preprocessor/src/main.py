@@ -1,4 +1,3 @@
-"""FastAPI 애플리케이션 엔트리포인트"""
 import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -27,14 +26,10 @@ app.add_middleware(
 
 app.include_router(router)
 
-
 @app.on_event("startup")
 async def startup_event():
-    """서비스 시작 시 실행"""
     logger.info("MediDB Preprocessor Service started")
-
 
 @app.on_event("shutdown")
 async def shutdown_event():
-    """서비스 종료 시 실행"""
     logger.info("MediDB Preprocessor Service stopped")

@@ -1,4 +1,3 @@
-"""Gaussian Mixture Model (GMM) 클러스터링 모듈"""
 import logging
 from typing import Optional, List, Dict, Any, Tuple
 import numpy as np
@@ -9,9 +8,7 @@ from .umap_reducer import UMAPReducer
 
 logger = logging.getLogger(__name__)
 
-
 class GMMClusterer:
-    """Gaussian Mixture Model 기반 확률적 클러스터링"""
 
     def __init__(
         self,
@@ -23,18 +20,6 @@ class GMMClusterer:
         random_state: int = 42,
         reg_covar: float = 1e-6
     ):
-        """
-        GMM 클러스터러 초기화
-
-        Args:
-            n_components: 가우시안 컴포넌트(클러스터) 수
-            covariance_type: 공분산 타입 (full/tied/diag/spherical)
-            max_iter: 최대 반복 횟수
-            n_init: 다른 초기화로 실행할 횟수
-            init_params: 파라미터 초기화 방법 (kmeans/random)
-            random_state: 재현성을 위한 시드
-            reg_covar: 공분산 정규화 값
-        """
         self.n_components = n_components
         self.covariance_type = covariance_type
         self.max_iter = max_iter
@@ -52,22 +37,11 @@ class GMMClusterer:
         self.aic_: Optional[float] = None
 
     def fit(self, X: np.ndarray) -> "GMMClusterer":
-        """
-        GMM 클러스터링 학습
-
-        Args:
-            X: 입력 데이터 (n_samples, n_features)
-
-        Returns:
-            self
-        """
         logger.info(f"Starting GMM clustering with {X.shape[0]} samples, {self.n_components} components")
 
-        # NaN/Inf를 0으로 대체하여 StandardScaler 오류 방지
         X = np.nan_to_num(X, nan=0.0, posinf=0.0, neginf=0.0)
 
         X_scaled = self.scaler.fit_transform(X)
-
 
         if X.shape[0] > 2:
             umap_reducer = UMAPReducer(
@@ -101,12 +75,10 @@ class GMMClusterer:
         return self
 
     def fit_predict(self, X: np.ndarray) -> np.ndarray:
-        """클러스터링 학습 및 레이블 반환"""
         self.fit(X)
         return self.labels_
 
     def predict(self, X: np.ndarray) -> np.ndarray:
-        """새 데이터에 대한 클러스터 예측"""
         if self.clusterer is None:
             raise ValueError("Model not fitted. Call fit() first.")
 
@@ -114,7 +86,6 @@ class GMMClusterer:
         return self.clusterer.predict(X_scaled)
 
     def predict_proba(self, X: np.ndarray) -> np.ndarray:
-        """새 데이터에 대한 클러스터 확률 예측"""
         if self.clusterer is None:
             raise ValueError("Model not fitted. Call fit() first.")
 
@@ -128,18 +99,6 @@ class GMMClusterer:
         max_components: int = 15,
         criterion: str = "bic"
     ) -> int:
-        """
-        BIC/AIC 기반 최적 컴포넌트 수 탐색
-
-        Args:
-            X: 입력 데이터
-            min_components: 최소 컴포넌트 수
-            max_components: 최대 컴포넌트 수
-            criterion: 평가 기준 (bic/aic)
-
-        Returns:
-            최적 컴포넌트 수
-        """
         X = np.nan_to_num(X, nan=0.0, posinf=0.0, neginf=0.0)
         X_scaled = self.scaler.fit_transform(X)
         max_components = min(max_components, X.shape[0] - 1)
@@ -166,7 +125,6 @@ class GMMClusterer:
         return optimal[0]
 
     def get_cluster_summary(self) -> Dict[str, Any]:
-        """클러스터링 요약 정보"""
         if self.labels_ is None:
             raise ValueError("Model not fitted. Call fit() first.")
 
@@ -185,7 +143,6 @@ class GMMClusterer:
         }
 
     def get_results(self) -> List[Dict[str, Any]]:
-        """전체 클러스터링 결과 반환"""
         if self.labels_ is None:
             raise ValueError("Model not fitted. Call fit() first.")
 
@@ -203,7 +160,6 @@ class GMMClusterer:
         return results
 
     def get_params(self) -> Dict[str, Any]:
-        """현재 파라미터 반환"""
         return {
             "n_components": self.n_components,
             "covariance_type": self.covariance_type,
@@ -212,25 +168,12 @@ class GMMClusterer:
             "init_params": self.init_params
         }
 
-
 def cluster_with_gmm(
     data: np.ndarray,
     n_components: int = 5,
     covariance_type: str = "full",
     auto_select: bool = False
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """
-    편의 함수: GMM 클러스터링 실행
-
-    Args:
-        data: 입력 데이터
-        n_components: 컴포넌트 수
-        covariance_type: 공분산 타입
-        auto_select: 자동 컴포넌트 수 선택 여부
-
-    Returns:
-        (클러스터 레이블, 확률, UMAP 좌표)
-    """
     clusterer = GMMClusterer(
         n_components=n_components,
         covariance_type=covariance_type

@@ -1,4 +1,3 @@
-"""Mini-Batch K-Means 클러스터링 모듈"""
 import logging
 from typing import Optional, List, Dict, Any, Tuple
 import numpy as np
@@ -10,9 +9,7 @@ from .umap_reducer import UMAPReducer
 
 logger = logging.getLogger(__name__)
 
-
 class MiniBatchKMeansClusterer:
-    """Mini-Batch K-Means 기반 대용량 데이터 클러스터링"""
 
     def __init__(
         self,
@@ -24,18 +21,6 @@ class MiniBatchKMeansClusterer:
         random_state: int = 42,
         reassignment_ratio: float = 0.01
     ):
-        """
-        Mini-Batch K-Means 클러스터러 초기화
-
-        Args:
-            n_clusters: 클러스터 수
-            batch_size: 미니 배치 크기
-            max_iter: 최대 반복 횟수
-            n_init: 다른 초기화로 실행할 횟수
-            init: 초기화 방법 (k-means++/random)
-            random_state: 재현성을 위한 시드
-            reassignment_ratio: 재할당 비율
-        """
         self.n_clusters = n_clusters
         self.batch_size = batch_size
         self.max_iter = max_iter
@@ -54,15 +39,6 @@ class MiniBatchKMeansClusterer:
         self.calinski_harabasz_: Optional[float] = None
 
     def fit(self, X: np.ndarray) -> "MiniBatchKMeansClusterer":
-        """
-        Mini-Batch K-Means 클러스터링 학습
-
-        Args:
-            X: 입력 데이터 (n_samples, n_features)
-
-        Returns:
-            self
-        """
         if X.shape[0] == 0:
             raise ValueError("Cannot cluster empty dataset.")
         if X.shape[0] == 1:
@@ -75,11 +51,9 @@ class MiniBatchKMeansClusterer:
 
         logger.info(f"Starting Mini-Batch K-Means with {X.shape[0]} samples, {self.n_clusters} clusters")
 
-        # NaN/Inf를 0으로 대체하여 StandardScaler 오류 방지
         X = np.nan_to_num(X, nan=0.0, posinf=0.0, neginf=0.0)
 
         X_scaled = self.scaler.fit_transform(X)
-
 
         if X.shape[0] > 2:
             umap_reducer = UMAPReducer(
@@ -118,12 +92,10 @@ class MiniBatchKMeansClusterer:
         return self
 
     def fit_predict(self, X: np.ndarray) -> np.ndarray:
-        """클러스터링 학습 및 레이블 반환"""
         self.fit(X)
         return self.labels_
 
     def predict(self, X: np.ndarray) -> np.ndarray:
-        """새 데이터에 대한 클러스터 예측"""
         if self.clusterer is None:
             raise ValueError("Model not fitted. Call fit() first.")
 
@@ -131,15 +103,6 @@ class MiniBatchKMeansClusterer:
         return self.clusterer.predict(X_scaled)
 
     def partial_fit(self, X: np.ndarray) -> "MiniBatchKMeansClusterer":
-        """
-        점진적 학습 (스트리밍 데이터용)
-
-        Args:
-            X: 새 데이터 배치
-
-        Returns:
-            self
-        """
         X_scaled = self.scaler.fit_transform(X) if self.clusterer is None else self.scaler.transform(X)
 
         if self.clusterer is None:
@@ -159,18 +122,6 @@ class MiniBatchKMeansClusterer:
         max_clusters: int = 15,
         metric: str = "silhouette"
     ) -> int:
-        """
-        최적 클러스터 수 탐색 (Elbow method / Silhouette)
-
-        Args:
-            X: 입력 데이터
-            min_clusters: 최소 클러스터 수
-            max_clusters: 최대 클러스터 수
-            metric: 평가 지표 (silhouette/inertia)
-
-        Returns:
-            최적 클러스터 수
-        """
         X_scaled = self.scaler.fit_transform(X)
         max_clusters = min(max_clusters, X.shape[0] - 1)
 
@@ -194,17 +145,14 @@ class MiniBatchKMeansClusterer:
             if metric == "silhouette":
                 score = silhouette_score(X_scaled, labels)
                 scores.append((k, score))
-            else:  # inertia
+            else:
                 scores.append((k, kmeans.inertia_))
 
-        # Silhouette는 최대, Inertia는 최소 (elbow 방식)
         if metric == "silhouette":
             optimal = max(scores, key=lambda x: x[1])
         else:
-            # Elbow method: 2차 차분(변화율의 변화)이 가장 큰 지점
             inertias = [s[1] for s in scores]
             if len(inertias) < 3:
-                # 포인트가 너무 적으면 inertia가 가장 낮은 k 반환
                 optimal = min(scores, key=lambda x: x[1])
             else:
                 second_diffs = np.diff(inertias, n=2)
@@ -215,7 +163,6 @@ class MiniBatchKMeansClusterer:
         return optimal[0]
 
     def get_cluster_summary(self) -> Dict[str, Any]:
-        """클러스터링 요약 정보"""
         if self.labels_ is None:
             raise ValueError("Model not fitted. Call fit() first.")
 
@@ -234,7 +181,6 @@ class MiniBatchKMeansClusterer:
         }
 
     def get_results(self) -> List[Dict[str, Any]]:
-        """전체 클러스터링 결과 반환"""
         if self.labels_ is None:
             raise ValueError("Model not fitted. Call fit() first.")
 
@@ -250,7 +196,6 @@ class MiniBatchKMeansClusterer:
         return results
 
     def get_cluster_centers(self) -> List[List[float]]:
-        """클러스터 중심점 반환 (원본 스케일)"""
         if self.cluster_centers_ is None:
             raise ValueError("Model not fitted. Call fit() first.")
 
@@ -258,7 +203,6 @@ class MiniBatchKMeansClusterer:
         return centers_original.tolist()
 
     def get_params(self) -> Dict[str, Any]:
-        """현재 파라미터 반환"""
         return {
             "n_clusters": self.n_clusters,
             "batch_size": self.batch_size,
@@ -267,25 +211,12 @@ class MiniBatchKMeansClusterer:
             "init": self.init
         }
 
-
 def cluster_with_minibatch_kmeans(
     data: np.ndarray,
     n_clusters: int = 8,
     batch_size: int = 1024,
     auto_select: bool = False
 ) -> Tuple[np.ndarray, np.ndarray]:
-    """
-    편의 함수: Mini-Batch K-Means 클러스터링 실행
-
-    Args:
-        data: 입력 데이터
-        n_clusters: 클러스터 수
-        batch_size: 미니 배치 크기
-        auto_select: 자동 클러스터 수 선택 여부
-
-    Returns:
-        (클러스터 레이블, UMAP 좌표)
-    """
     clusterer = MiniBatchKMeansClusterer(
         n_clusters=n_clusters,
         batch_size=batch_size

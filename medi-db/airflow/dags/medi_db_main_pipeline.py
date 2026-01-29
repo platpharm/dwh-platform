@@ -1,14 +1,3 @@
-"""
-MediDB 메인 파이프라인 DAG
-일일 실행: 상품 트렌드 크롤링 → 전처리 → 클러스터링(병렬) → 랭킹 → 타겟팅
-
-파이프라인 순서:
-1. [선택] 상품명 기반 트렌드 크롤링 (DB 상품명으로 Google Trends 수집)
-2. 전처리 (약국, 상품, 주문)
-3. 클러스터링 (상품, 약국) - 병렬 실행
-4. 랭킹 계산
-5. 타겟팅
-"""
 from datetime import datetime, timedelta
 from airflow import DAG
 from airflow.providers.http.operators.http import SimpleHttpOperator
@@ -24,12 +13,11 @@ default_args = {
     'retry_delay': timedelta(minutes=5),
 }
 
-
 with DAG(
     'medi_db_main_pipeline',
     default_args=default_args,
     description='MediDB 메인 데이터 파이프라인',
-    schedule_interval='0 2 * * *',  # 매일 새벽 2시
+    schedule_interval='0 2 * * *',
     start_date=datetime(2025, 1, 1),
     catchup=False,
     tags=['medi-db', 'main'],
@@ -42,7 +30,7 @@ with DAG(
         method='POST',
         headers={'Content-Type': 'application/json'},
         data=json.dumps({
-            'top_n': 100,           # 상위 100개 상품
+            'top_n': 100,
             'include_related': True
         }),
         response_check=lambda response: response.json().get('success', False),

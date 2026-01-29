@@ -1,4 +1,3 @@
-"""구글 트렌드 크롤러 (pytrends 사용)"""
 
 import logging
 import re
@@ -16,10 +15,8 @@ from shared.config import ESIndex
 
 logger = logging.getLogger(__name__)
 
-# Google Trends API 배치 간 대기 시간 (초) - rate limit 방지
 BATCH_SLEEP_SECONDS = 3
 
-# 카테고리2 코드 매핑 (상품명 검색량 부족 시 대체 검색용)
 CATEGORY2_MAPPING = {
     "01": "해열진통소염제",
     "02": "항히스타민제",
@@ -43,17 +40,9 @@ CATEGORY2_MAPPING = {
     "20": "기타의약품",
 }
 
-
 class GoogleTrendsCrawler:
-    """구글 트렌드 크롤러 (pytrends 라이브러리 사용)"""
 
     def __init__(self, hl: str = "ko", tz: int = 540, geo: str = "KR"):
-        """
-        Args:
-            hl: 언어 설정 (default: 한국어)
-            tz: 타임존 오프셋 (default: 540 = UTC+9, 한국)
-            geo: 지역 설정 (default: 한국)
-        """
         self.hl = hl
         self.tz = tz
         self.geo = geo
@@ -64,7 +53,6 @@ class GoogleTrendsCrawler:
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
     ) -> str:
-        """timeframe 문자열 생성"""
         if not start_date:
             start_date = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
         if not end_date:
@@ -82,17 +70,15 @@ class GoogleTrendsCrawler:
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """시간에 따른 관심도 데이터 가져오기"""
         timeframe = self._get_timeframe(start_date, end_date)
         results = {}
 
-        # pytrends는 한 번에 최대 5개 키워드만 처리 가능
         for i in range(0, len(keywords), 5):
             batch_keywords = keywords[i : i + 5]
 
             self.pytrends.build_payload(
                 kw_list=batch_keywords,
-                cat=0,  # 모든 카테고리
+                cat=0,
                 timeframe=timeframe,
                 geo=self.geo,
             )
@@ -122,7 +108,6 @@ class GoogleTrendsCrawler:
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
     ) -> Dict[str, Dict[str, Any]]:
-        """연관 검색어 가져오기"""
         timeframe = self._get_timeframe(start_date, end_date)
         results = {}
 
@@ -167,7 +152,6 @@ class GoogleTrendsCrawler:
         interest_data: Dict[str, Dict],
         related_data: Optional[Dict[str, Dict]] = None,
     ) -> List[TrendData]:
-        """API 응답을 TrendData 스키마로 변환"""
         trend_data_list = []
 
         for keyword, time_series in interest_data.items():
@@ -184,7 +168,6 @@ class GoogleTrendsCrawler:
                 related_keywords = None
                 if related_data and keyword in related_data:
                     metadata["related_queries"] = related_data[keyword]
-                    # Extract related keywords from top queries
                     top_queries = related_data[keyword].get("top", [])
                     if top_queries:
                         related_keywords = [q.get("query", "") for q in top_queries[:10] if q.get("query")]
@@ -208,7 +191,6 @@ class GoogleTrendsCrawler:
         end_date: Optional[str] = None,
         include_related: bool = True,
     ) -> int:
-        """크롤링 후 ES에 저장"""
         interest_data = self.fetch_interest_over_time(keywords, start_date, end_date)
 
         related_data = None
@@ -245,21 +227,11 @@ class GoogleTrendsCrawler:
         self,
         top_n: int = 100,
     ) -> List[Dict[str, Any]]:
-        """
-        CDC ES에서 인기 상품 Top N개 조회
-
-        Args:
-            top_n: 가져올 상품 수 (기본값: 100)
-
-        Returns:
-            상품 정보 리스트 [{product_id, product_name, category2, ...}, ...]
-        """
         logger.info(f"Fetching top {top_n} products from CDC ES")
 
         try:
             query = {"match_all": {}}
 
-            # ranking_result 인덱스에서 인기 상품 조회, 없으면 CDC product에서 전체 조회
             ranking_products = []
             try:
                 ranking_query = {"match_all": {}}
@@ -311,15 +283,6 @@ class GoogleTrendsCrawler:
             return []
 
     def _normalize_product_name_for_search(self, name: str) -> str:
-        """
-        상품명을 Google Trends 검색에 적합하게 정규화
-
-        Args:
-            name: 원본 상품명
-
-        Returns:
-            정규화된 상품명
-        """
         if not name:
             return ""
 
@@ -341,7 +304,6 @@ class GoogleTrendsCrawler:
         return normalized
 
     def _get_category_name(self, category2: Optional[str]) -> Optional[str]:
-        """카테고리2 코드를 카테고리명으로 변환"""
         if not category2:
             return None
         return CATEGORY2_MAPPING.get(str(category2).zfill(2))
@@ -352,14 +314,6 @@ class GoogleTrendsCrawler:
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
     ) -> Tuple[Dict[str, Any], List[Dict]]:
-        """
-        상품명 트렌드와 카테고리 트렌드를 독립적으로 수집
-
-        Returns:
-            (interest_data, product_mapping_list)
-            - interest_data: 키워드별 트렌드 시계열
-            - product_mapping_list: 매핑 문서 리스트 (keyword_source로 구분)
-        """
         logger.info(f"Fetching trends for {len(products)} products")
 
         product_keywords: Dict[str, List[int]] = {}
@@ -462,16 +416,6 @@ class GoogleTrendsCrawler:
         include_related: bool = True,
         products: Optional[List[Dict[str, Any]]] = None,
     ) -> Dict[str, Any]:
-        """
-        상품명 기반 트렌드 크롤링 후 ES에 저장
-
-        Args:
-            top_n: 검색할 상위 상품 수
-            start_date: 검색 시작일 (YYYY-MM-DD)
-            end_date: 검색 종료일 (YYYY-MM-DD)
-            include_related: 연관 검색어 포함 여부
-            products: 외부에서 전달받은 상품 리스트 (None이면 ES에서 조회)
-        """
         logger.info(f"[Google] Starting product-based trend crawling")
 
         if products is None:
@@ -539,6 +483,5 @@ class GoogleTrendsCrawler:
             "unique_keywords": len(interest_data),
             "message": f"[Google] 트렌드 {trend_count}건, 매핑 {mapping_count}건 저장",
         }
-
 
 google_crawler = GoogleTrendsCrawler()

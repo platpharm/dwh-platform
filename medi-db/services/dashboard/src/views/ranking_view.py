@@ -1,4 +1,3 @@
-"""인기 의약품 랭킹 뷰 페이지"""
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -10,17 +9,14 @@ from elasticsearch.exceptions import NotFoundError
 from shared.clients.es_client import es_client
 from shared.config import ESIndex
 
-
 SALES_WEIGHT = 0.6
 PRODUCT_TREND_WEIGHT = 0.3
 CATEGORY_TREND_WEIGHT = 0.1
-
 
 def fetch_ranking_data(
     category: str = None,
     limit: int = 100
 ) -> List[Dict[str, Any]]:
-    """ES에서 랭킹 결과 조회"""
     if category and category != "전체":
         query = {"term": {"category2": category}}
     else:
@@ -43,9 +39,7 @@ def fetch_ranking_data(
         st.error(f"데이터 조회 실패: {e}")
         return []
 
-
 def fetch_categories() -> List[str]:
-    """카테고리 목록 조회"""
     try:
         response = es_client.client.search(
             index=ESIndex.RANKING_RESULT,
@@ -66,22 +60,18 @@ def fetch_categories() -> List[str]:
     except Exception:
         return ["전체"]
 
-
 def calculate_weighted_score(
     sales_score: float,
     product_trend_score: float,
     category_trend_score: float,
 ) -> float:
-    """가중치 점수 계산 (판매량 60% + 상품명 트렌드 30% + 카테고리 트렌드 10%)"""
     return (
         (sales_score * SALES_WEIGHT)
         + (product_trend_score * PRODUCT_TREND_WEIGHT)
         + (category_trend_score * CATEGORY_TREND_WEIGHT)
     )
 
-
 def create_ranking_table(df: pd.DataFrame) -> pd.DataFrame:
-    """랭킹 테이블 생성"""
     if "product_trend_score" not in df.columns:
         df["product_trend_score"] = 0.0
     if "category_trend_score" not in df.columns:
@@ -104,9 +94,7 @@ def create_ranking_table(df: pd.DataFrame) -> pd.DataFrame:
 
     return df
 
-
 def create_ranking_bar_chart(df: pd.DataFrame, top_n: int = 20) -> Optional[go.Figure]:
-    """상위 N개 랭킹 바 차트"""
     if df.empty or "product_name" not in df.columns:
         return None
 
@@ -156,9 +144,7 @@ def create_ranking_bar_chart(df: pd.DataFrame, top_n: int = 20) -> Optional[go.F
 
     return fig
 
-
 def create_score_comparison_chart(df: pd.DataFrame, top_n: int = 10) -> Optional[go.Figure]:
-    """판매량 vs 상품명 트렌드 점수 비교 산점도"""
     if df.empty or "sales_score" not in df.columns or "product_trend_score" not in df.columns:
         return None
 
@@ -187,9 +173,7 @@ def create_score_comparison_chart(df: pd.DataFrame, top_n: int = 10) -> Optional
 
     return fig
 
-
 def create_category_ranking_chart(df: pd.DataFrame) -> Optional[go.Figure]:
-    """카테고리별 랭킹 분포"""
     if df.empty or "category2" not in df.columns:
         return None
 
@@ -215,9 +199,7 @@ def create_category_ranking_chart(df: pd.DataFrame) -> Optional[go.Figure]:
 
     return fig
 
-
 def render_page():
-    """인기 의약품 랭킹 페이지 렌더링"""
     st.title("인기 의약품 랭킹")
     st.markdown("---")
 
@@ -351,7 +333,6 @@ def render_page():
             st.info("조회된 데이터가 없습니다. ES 인덱스를 확인해주세요.")
     else:
         st.info("'랭킹 조회' 버튼을 클릭하여 인기 의약품 랭킹을 확인하세요.")
-
 
 if __name__ == "__main__":
     render_page()

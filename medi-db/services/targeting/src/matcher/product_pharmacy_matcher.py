@@ -1,4 +1,3 @@
-"""의약품-약국 매칭 알고리즘"""
 
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
@@ -11,9 +10,7 @@ from shared.config import ESIndex
 from shared.models.schemas import TargetingResult
 from .vector_combiner import VectorCombiner
 
-
 class ProductPharmacyMatcher:
-    """의약품-약국 타겟팅 매칭 클래스"""
 
     def __init__(self):
         self.es_client = es_client
@@ -23,14 +20,6 @@ class ProductPharmacyMatcher:
         self,
         entity_type: Optional[str] = None
     ) -> List[Dict[str, Any]]:
-        """클러스터링 결과 조회
-
-        Args:
-            entity_type: "product" 또는 "pharmacy", None이면 전체
-
-        Returns:
-            클러스터링 결과 리스트
-        """
         if entity_type:
             query = {"term": {"entity_type": entity_type}}
         else:
@@ -50,14 +39,6 @@ class ProductPharmacyMatcher:
         self,
         top_n: int = 100
     ) -> List[Dict[str, Any]]:
-        """랭킹 결과 조회 (상위 N개)
-
-        Args:
-            top_n: 상위 N개 상품
-
-        Returns:
-            랭킹 결과 리스트
-        """
         query = {"match_all": {}}
 
         response = self.es_client.client.search(
@@ -75,14 +56,6 @@ class ProductPharmacyMatcher:
         self,
         clustering_results: List[Dict[str, Any]]
     ) -> Tuple[Dict[int, List], Dict[int, List]]:
-        """클러스터 ID별 엔티티 매핑 구축
-
-        Args:
-            clustering_results: 클러스터링 결과 리스트
-
-        Returns:
-            (상품 클러스터 매핑, 약국 클러스터 매핑)
-        """
         product_clusters: Dict[int, List] = defaultdict(list)
         pharmacy_clusters: Dict[int, List] = defaultdict(list)
 
@@ -108,39 +81,18 @@ class ProductPharmacyMatcher:
         product_clusters: Dict[int, List[int]],
         pharmacy_clusters: Dict[int, List[int]]
     ) -> float:
-        """클러스터 간 친화도 계산
-
-        같은 클러스터 ID를 가진 상품과 약국 간의 친화도가 높음
-        클러스터 크기를 고려한 정규화
-
-        Args:
-            product_cluster_id: 상품 클러스터 ID
-            pharmacy_cluster_id: 약국 클러스터 ID
-            product_clusters: 상품 클러스터 매핑
-            pharmacy_clusters: 약국 클러스터 매핑
-
-        Returns:
-            친화도 점수 (0~1)
-        """
-        # 기본 친화도: 같은 클러스터 ID이면 높은 점수
         if product_cluster_id == pharmacy_cluster_id:
             base_affinity = 0.8
         else:
-            # 클러스터 ID 차이에 따른 감소
             cluster_distance = abs(product_cluster_id - pharmacy_cluster_id)
             base_affinity = max(0.1, 0.5 - (cluster_distance * 0.05))
 
-        # 클러스터 크기 기반 보정 (작은 클러스터일수록 특화됨)
         product_cluster_size = len(product_clusters.get(product_cluster_id, []))
         pharmacy_cluster_size = len(pharmacy_clusters.get(pharmacy_cluster_id, []))
 
-        # 정규화 (크기가 작을수록 보너스, 클수록 감소)
         size_factor = 1.0
         if product_cluster_size > 0 and pharmacy_cluster_size > 0:
             avg_size = (product_cluster_size + pharmacy_cluster_size) / 2
-            # Small clusters (avg_size ~1): factor ~1.18
-            # Medium clusters (avg_size ~50): factor ~1.0
-            # Large clusters (avg_size ~200): factor ~0.88
             size_factor = min(1.2, max(0.8, 10 / (avg_size + 10) + 0.8))
 
         return min(1.0, base_affinity * size_factor)
@@ -149,14 +101,6 @@ class ProductPharmacyMatcher:
         self,
         ranking_results: List[Dict[str, Any]]
     ) -> Dict[Any, Dict[str, Any]]:
-        """랭킹 결과를 상품 ID 기반 맵으로 변환
-
-        Args:
-            ranking_results: 랭킹 결과 리스트
-
-        Returns:
-            상품 ID -> 랭킹 정보 매핑
-        """
         return {
             result["product_id"]: {
                 "product_name": result.get("product_name"),
@@ -164,30 +108,20 @@ class ProductPharmacyMatcher:
                 "rank": result.get("rank", 999)
             }
             for result in ranking_results
-            if result.get("product_name")  # product_name 없으면 제외
+            if result.get("product_name")
         }
 
     def get_pharmacy_info(
         self,
         pharmacy_ids: List
     ) -> Dict[Any, Dict[str, Any]]:
-        """약국 정보 조회 (CDC account 데이터에서 직접)
-
-        Args:
-            pharmacy_ids: 약국 ID 리스트
-
-        Returns:
-            약국 ID -> 약국 정보 매핑
-        """
         pharmacy_info = {}
 
         if not pharmacy_ids:
             return pharmacy_info
 
-        # Convert to strings for ES query
         pharmacy_ids_str = [str(pid) for pid in pharmacy_ids]
 
-        # First get cluster info
         cluster_query = {
             "bool": {
                 "must": [
@@ -207,7 +141,6 @@ class ProductPharmacyMatcher:
         for result in cluster_results:
             cluster_map[str(result.get("entity_id"))] = result.get("cluster_id", 0)
 
-        # Get account info from CDC (only cu/bh roles = pharmacies)
         try:
             cdc_results = self.es_client.search(
                 index=ESIndex.CDC_ACCOUNT,
@@ -215,7 +148,7 @@ class ProductPharmacyMatcher:
                     "bool": {
                         "must": [
                             {"terms": {"id": pharmacy_ids_str}},
-                            {"terms": {"role": ["CU", "BH"]}}  # 약국만 필터링 (대문자)
+                            {"terms": {"role": ["CU", "BH"]}}
                         ],
                         "must_not": [
                             {"exists": {"field": "deleted_at"}}
@@ -234,11 +167,9 @@ class ProductPharmacyMatcher:
                 ]
                 full_address = " ".join(filter(None, address_parts))
 
-                # 약국명 우선 (host_name), 없으면 개인명 (name)
                 pharmacy_name = result.get("host_name") or result.get("name")
                 if not pharmacy_name:
-                    continue  # 이름 없는 약국 스킵
-                # Store with both int and str keys for flexible lookup
+                    continue
                 info_dict = {
                     "pharmacy_name": pharmacy_name,
                     "pharmacy_address": full_address,
@@ -247,20 +178,18 @@ class ProductPharmacyMatcher:
                     "cluster_id": cluster_map.get(str(pharmacy_id), 0)
                 }
                 pharmacy_info[pharmacy_id] = info_dict
-                # Also store with alternative key type for cross-type lookups
                 try:
                     alt_key = int(pharmacy_id) if isinstance(pharmacy_id, str) else str(pharmacy_id)
                     pharmacy_info[alt_key] = info_dict
                 except (ValueError, TypeError):
                     pass
         except Exception as e:
-            # Fallback to clustering features
             for result in cluster_results:
                 pharmacy_id = result.get("entity_id")
                 features = result.get("features", {})
                 pharmacy_name = features.get("name")
                 if not pharmacy_name:
-                    continue  # 이름 없는 약국 스킵
+                    continue
                 pharmacy_info[pharmacy_id] = {
                     "pharmacy_name": pharmacy_name,
                     "pharmacy_address": features.get("address", ""),
@@ -274,15 +203,6 @@ class ProductPharmacyMatcher:
         top_n_products: int = 100,
         top_n_pharmacies: int = 50
     ) -> List[TargetingResult]:
-        """의약품-약국 매칭 실행
-
-        Args:
-            top_n_products: 타겟팅할 상위 상품 수
-            top_n_pharmacies: 상품당 추천 약국 수
-
-        Returns:
-            타겟팅 결과 리스트
-        """
         clustering_results = self.get_clustering_results()
         ranking_results = self.get_ranking_results(top_n=top_n_products)
         product_clusters, pharmacy_clusters = self.build_cluster_mapping(
@@ -314,7 +234,6 @@ class ProductPharmacyMatcher:
         timestamp = datetime.now()
 
         for product_id, product_info in ranking_map.items():
-            # entity_id from clustering may be int or str; try both for lookup
             product_cluster_id = product_to_cluster.get(product_id)
             if product_cluster_id is None:
                 product_cluster_id = product_to_cluster.get(str(product_id), 0)
@@ -343,20 +262,19 @@ class ProductPharmacyMatcher:
 
             product_name = product_info.get("product_name")
             if not product_name:
-                continue  # 상품명 없으면 스킵
+                continue
 
             for pharmacy_id, match_score in top_pharmacies:
-                # pharmacy_info may be keyed by int or str; try both
                 info = pharmacy_info.get(pharmacy_id) or pharmacy_info.get(str(pharmacy_id)) or {}
                 pharmacy_name = info.get("pharmacy_name")
                 if not pharmacy_name:
-                    continue  # 약국명 없으면 스킵
+                    continue
 
                 try:
                     safe_product_id = int(product_id)
                     safe_pharmacy_id = int(pharmacy_id)
                 except (ValueError, TypeError):
-                    continue  # ID를 int로 변환할 수 없으면 스킵
+                    continue
 
                 result = TargetingResult(
                     product_id=safe_product_id,
@@ -379,14 +297,6 @@ class ProductPharmacyMatcher:
         self,
         results: List[TargetingResult]
     ) -> Tuple[int, int]:
-        """타겟팅 결과 저장
-
-        Args:
-            results: 타겟팅 결과 리스트
-
-        Returns:
-            (성공 건수, 실패 건수)
-        """
         if not results:
             return (0, 0)
 
@@ -400,12 +310,11 @@ class ProductPharmacyMatcher:
             success_count, errors = self.es_client.bulk_index(
                 index=ESIndex.TARGETING_RESULT,
                 documents=documents,
-                id_field=None  # 자동 ID 생성
+                id_field=None
             )
 
             return (success_count, len(errors) if isinstance(errors, list) else 0)
         except Exception as e:
-            # helpers.bulk raises on error by default; count partial successes
             import logging
             logging.getLogger(__name__).error(f"Bulk index error: {e}")
             return (0, len(documents))
@@ -416,16 +325,6 @@ class ProductPharmacyMatcher:
         pharmacy_id: Optional[int] = None,
         limit: int = 100
     ) -> List[Dict[str, Any]]:
-        """타겟팅 결과 조회
-
-        Args:
-            product_id: 특정 상품 ID (선택)
-            pharmacy_id: 특정 약국 ID (선택)
-            limit: 최대 결과 수
-
-        Returns:
-            타겟팅 결과 리스트
-        """
         must_conditions = []
 
         if product_id is not None:
@@ -455,15 +354,6 @@ class ProductPharmacyMatcher:
         top_n_products: int = 100,
         top_n_pharmacies: int = 50
     ) -> Dict[str, Any]:
-        """타겟팅 전체 프로세스 실행
-
-        Args:
-            top_n_products: 타겟팅할 상위 상품 수
-            top_n_pharmacies: 상품당 추천 약국 수
-
-        Returns:
-            실행 결과 정보
-        """
         results = self.match_products_to_pharmacies(
             top_n_products=top_n_products,
             top_n_pharmacies=top_n_pharmacies
@@ -478,6 +368,5 @@ class ProductPharmacyMatcher:
             "top_n_products": top_n_products,
             "top_n_pharmacies": top_n_pharmacies
         }
-
 
 product_pharmacy_matcher = ProductPharmacyMatcher()

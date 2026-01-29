@@ -1,4 +1,3 @@
-"""MediDB Targeting Service - FastAPI 엔트리포인트"""
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -20,17 +19,13 @@ app.add_middleware(
 )
 app.include_router(router)
 
-
 @app.on_event("startup")
 async def startup_event():
-    """서비스 시작 시 초기화"""
     if es_client.health_check():
         print("Elasticsearch connection established")
     else:
         print("Warning: Elasticsearch connection failed")
 
-
 @app.on_event("shutdown")
 async def shutdown_event():
-    """서비스 종료 시 정리"""
     print("Targeting service shutting down")

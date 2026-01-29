@@ -1,4 +1,3 @@
-"""Clustering Service - FastAPI 엔트리포인트"""
 import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
@@ -14,13 +13,11 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-
 def get_expected_mappings():
-    """Expected index mappings for clustering results"""
     return {
         "properties": {
             "entity_type": {"type": "keyword"},
-            "entity_id": {"type": "keyword"},  # keyword supports both int and string IDs
+            "entity_id": {"type": "keyword"},
             "entity_name": {"type": "keyword"},
             "cluster_id": {"type": "integer"},
             "algorithm": {"type": "keyword"},
@@ -30,9 +27,7 @@ def get_expected_mappings():
         }
     }
 
-
 def ensure_index_exists():
-    """클러스터링 결과 인덱스 생성 또는 재생성 (매핑 불일치 시)"""
     index_name = ESIndex.CLUSTERING_RESULT
     mappings = get_expected_mappings()
     settings = {
@@ -48,7 +43,6 @@ def ensure_index_exists():
         )
         logger.info(f"Created index: {index_name}")
     else:
-        # Check if entity_id mapping is correct (should be 'long', not 'integer')
         try:
             current_mapping = es_client.client.indices.get_mapping(index=index_name)
             entity_id_type = (
@@ -63,7 +57,6 @@ def ensure_index_exists():
                     f"Index {index_name} has entity_id mapped as '{entity_id_type}', "
                     "but 'keyword' is required for both product and pharmacy IDs. Recreating index..."
                 )
-                # Delete and recreate with correct mapping
                 es_client.client.indices.delete(index=index_name)
                 es_client.create_index(
                     index=index_name,
@@ -74,10 +67,8 @@ def ensure_index_exists():
         except Exception as e:
             logger.error(f"Error checking/updating index mapping: {e}")
 
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """애플리케이션 생명주기 관리"""
     logger.info("Starting Clustering Service...")
 
     if es_client.health_check():
@@ -89,7 +80,6 @@ async def lifespan(app: FastAPI):
     yield
 
     logger.info("Shutting down Clustering Service...")
-
 
 app = FastAPI(
     title="MediDB Clustering Service",
@@ -108,10 +98,8 @@ app.add_middleware(
 
 app.include_router(router, tags=["clustering"])
 
-
 @app.get("/")
 async def root():
-    """서비스 정보"""
     return {
         "service": "MediDB Clustering Service",
         "version": "0.1.0",
@@ -126,7 +114,6 @@ async def root():
             "health": "GET /health"
         }
     }
-
 
 if __name__ == "__main__":
     import uvicorn

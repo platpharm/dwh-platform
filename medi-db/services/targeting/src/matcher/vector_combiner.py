@@ -1,11 +1,8 @@
-"""벡터 결합기 - 다양한 점수를 결합하여 최종 매칭 점수 산출"""
 
 from typing import Dict, List, Optional, Tuple
 import numpy as np
 
-
 class VectorCombiner:
-    """다양한 특성 벡터를 결합하여 최종 점수 산출"""
 
     def __init__(
         self,
@@ -13,12 +10,6 @@ class VectorCombiner:
         ranking_weight: float = 0.3,
         pattern_weight: float = 0.2
     ):
-        """
-        Args:
-            cluster_weight: 클러스터 친화도 가중치
-            ranking_weight: 랭킹 점수 가중치
-            pattern_weight: 구매 패턴 가중치
-        """
         self.cluster_weight = cluster_weight
         self.ranking_weight = ranking_weight
         self.pattern_weight = pattern_weight
@@ -34,18 +25,7 @@ class VectorCombiner:
         ranking_weight: float,
         purchase_pattern_score: Optional[float] = None
     ) -> float:
-        """점수들을 가중 결합
-
-        Args:
-            cluster_affinity: 클러스터 친화도 (0~1)
-            ranking_weight: 랭킹 가중치 (0~1)
-            purchase_pattern_score: 구매 패턴 점수 (0~1, 선택)
-
-        Returns:
-            최종 매칭 점수 (0~1)
-        """
         if purchase_pattern_score is None:
-            # 구매 패턴 없으면 다른 가중치 재분배
             adjusted_cluster_weight = self.cluster_weight + (self.pattern_weight * 0.6)
             adjusted_ranking_weight = self.ranking_weight + (self.pattern_weight * 0.4)
 
@@ -67,15 +47,6 @@ class VectorCombiner:
         vectors: List[np.ndarray],
         weights: Optional[List[float]] = None
     ) -> np.ndarray:
-        """특성 벡터들을 가중 결합
-
-        Args:
-            vectors: 벡터 리스트
-            weights: 가중치 리스트 (선택, 없으면 균등)
-
-        Returns:
-            결합된 벡터
-        """
         if not vectors:
             return np.array([])
 
@@ -107,15 +78,6 @@ class VectorCombiner:
         vec1: np.ndarray,
         vec2: np.ndarray
     ) -> float:
-        """코사인 유사도 계산
-
-        Args:
-            vec1: 벡터 1
-            vec2: 벡터 2
-
-        Returns:
-            코사인 유사도 (-1~1)
-        """
         norm1 = np.linalg.norm(vec1)
         norm2 = np.linalg.norm(vec2)
 
@@ -129,29 +91,12 @@ class VectorCombiner:
         vec1: np.ndarray,
         vec2: np.ndarray
     ) -> float:
-        """유클리드 거리 계산
-
-        Args:
-            vec1: 벡터 1
-            vec2: 벡터 2
-
-        Returns:
-            유클리드 거리
-        """
         return float(np.linalg.norm(vec1 - vec2))
 
     def normalize_vector(
         self,
         vec: np.ndarray
     ) -> np.ndarray:
-        """벡터 정규화 (L2 norm)
-
-        Args:
-            vec: 입력 벡터
-
-        Returns:
-            정규화된 벡터
-        """
         norm = np.linalg.norm(vec)
         if norm == 0:
             return vec
@@ -164,19 +109,8 @@ class VectorCombiner:
         ranking_score: float,
         cluster_affinity: float
     ) -> Dict[str, float]:
-        """타겟 벡터 생성
-
-        Args:
-            product_features: 상품 특성
-            pharmacy_features: 약국 특성
-            ranking_score: 랭킹 점수
-            cluster_affinity: 클러스터 친화도
-
-        Returns:
-            타겟 벡터 (딕셔너리 형태)
-        """
         target_vector = {
-            "ranking_score": ranking_score / 100,  # 정규화
+            "ranking_score": ranking_score / 100,
             "cluster_affinity": cluster_affinity,
         }
 
@@ -197,14 +131,6 @@ class VectorCombiner:
         self,
         score_tuples: List[Tuple[float, float, Optional[float]]]
     ) -> List[float]:
-        """배치로 점수 결합
-
-        Args:
-            score_tuples: (cluster_affinity, ranking_weight, purchase_pattern_score) 튜플 리스트
-
-        Returns:
-            결합된 점수 리스트
-        """
         return [
             self.combine_scores(
                 cluster_affinity=t[0],

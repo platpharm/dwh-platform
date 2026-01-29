@@ -1,4 +1,3 @@
-"""API 모듈"""
 
 from .endpoints import router
 

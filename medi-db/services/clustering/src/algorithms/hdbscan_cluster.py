@@ -1,4 +1,3 @@
-"""HDBSCAN 클러스터링 모듈"""
 import logging
 from typing import Optional, List, Dict, Any, Tuple
 import numpy as np
@@ -9,9 +8,7 @@ from .umap_reducer import UMAPReducer
 
 logger = logging.getLogger(__name__)
 
-
 class HDBSCANClusterer:
-    """HDBSCAN 기반 밀도 클러스터링"""
 
     def __init__(
         self,
@@ -23,18 +20,6 @@ class HDBSCANClusterer:
         umap_n_components: int = 10,
         umap_n_neighbors: int = 15
     ):
-        """
-        HDBSCAN 클러스터러 초기화
-
-        Args:
-            min_cluster_size: 최소 클러스터 크기
-            min_samples: 코어 포인트 판정 최소 샘플 수
-            metric: 거리 측정 방법
-            cluster_selection_method: 클러스터 선택 방법 (eom/leaf)
-            use_umap: UMAP 전처리 사용 여부
-            umap_n_components: UMAP 축소 차원
-            umap_n_neighbors: UMAP 이웃 수
-        """
         self.min_cluster_size = min_cluster_size
         self.min_samples = min_samples
         self.metric = metric
@@ -51,22 +36,11 @@ class HDBSCANClusterer:
         self.umap_coords_: Optional[np.ndarray] = None
 
     def fit(self, X: np.ndarray) -> "HDBSCANClusterer":
-        """
-        데이터에 HDBSCAN 클러스터링 학습
-
-        Args:
-            X: 입력 데이터 (n_samples, n_features)
-
-        Returns:
-            self
-        """
         logger.info(f"Starting HDBSCAN clustering with {X.shape[0]} samples")
 
-        # NaN/Inf를 0으로 대체하여 StandardScaler 오류 방지
         X = np.nan_to_num(X, nan=0.0, posinf=0.0, neginf=0.0)
 
         X_scaled = self.scaler.fit_transform(X)
-
 
         if self.use_umap and X.shape[1] > self.umap_n_components:
             logger.info(f"Applying UMAP: {X.shape[1]} -> {self.umap_n_components} dimensions")
@@ -101,20 +75,10 @@ class HDBSCANClusterer:
         return self
 
     def fit_predict(self, X: np.ndarray) -> np.ndarray:
-        """
-        클러스터링 학습 및 레이블 반환
-
-        Args:
-            X: 입력 데이터
-
-        Returns:
-            클러스터 레이블 배열
-        """
         self.fit(X)
         return self.labels_
 
     def get_cluster_summary(self) -> Dict[str, Any]:
-        """클러스터링 요약 정보"""
         if self.labels_ is None:
             raise ValueError("Model not fitted. Call fit() first.")
 
@@ -136,12 +100,6 @@ class HDBSCANClusterer:
         }
 
     def get_results(self) -> List[Dict[str, Any]]:
-        """
-        전체 클러스터링 결과 반환
-
-        Returns:
-            각 샘플의 클러스터 정보 리스트
-        """
         if self.labels_ is None:
             raise ValueError("Model not fitted. Call fit() first.")
 
@@ -158,7 +116,6 @@ class HDBSCANClusterer:
         return results
 
     def get_params(self) -> Dict[str, Any]:
-        """현재 파라미터 반환"""
         return {
             "min_cluster_size": self.min_cluster_size,
             "min_samples": self.min_samples,
@@ -168,25 +125,12 @@ class HDBSCANClusterer:
             "umap_n_components": self.umap_n_components
         }
 
-
 def cluster_with_hdbscan(
     data: np.ndarray,
     min_cluster_size: int = 5,
     min_samples: Optional[int] = None,
     use_umap: bool = True
 ) -> Tuple[np.ndarray, np.ndarray]:
-    """
-    편의 함수: HDBSCAN 클러스터링 실행
-
-    Args:
-        data: 입력 데이터
-        min_cluster_size: 최소 클러스터 크기
-        min_samples: 코어 포인트 최소 샘플
-        use_umap: UMAP 전처리 사용
-
-    Returns:
-        (클러스터 레이블, UMAP 좌표)
-    """
     clusterer = HDBSCANClusterer(
         min_cluster_size=min_cluster_size,
         min_samples=min_samples,

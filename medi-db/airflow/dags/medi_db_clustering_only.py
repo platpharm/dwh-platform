@@ -1,7 +1,3 @@
-"""
-MediDB 클러스터링 전용 DAG
-수동 실행용: 클러스터링 알고리즘만 독립 실행
-"""
 from datetime import datetime, timedelta
 from airflow import DAG
 from airflow.providers.http.operators.http import SimpleHttpOperator
@@ -20,7 +16,7 @@ with DAG(
     'medi_db_clustering_only',
     default_args=default_args,
     description='MediDB 클러스터링 단독 실행',
-    schedule_interval=None,  # 수동 실행
+    schedule_interval=None,
     start_date=datetime(2025, 1, 1),
     catchup=False,
     tags=['medi-db', 'clustering'],

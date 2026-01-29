@@ -1,4 +1,3 @@
-"""약국 데이터 전처리 프로세서"""
 import logging
 import re
 from datetime import datetime, timedelta
@@ -13,21 +12,18 @@ from shared.config import ESIndex
 
 logger = logging.getLogger(__name__)
 
-
 class PharmacyProcessor:
-    """약국(account) 데이터 전처리 클래스 (CDC ES 데이터 사용)"""
 
     def __init__(self):
         self.es = es_client
 
     def _get_accounts_from_cdc(self) -> List[Dict[str, Any]]:
-        """CDC ES에서 약국 데이터 조회"""
         logger.info("Fetching accounts from CDC ES...")
 
         query = {
             "bool": {
                 "must": [
-                    {"terms": {"role": ["cu", "bh"]}}  # 약국(cu, bh)만 필터링
+                    {"terms": {"role": ["cu", "bh"]}}
                 ],
                 "must_not": [
                     {"exists": {"field": "deleted_at"}}
@@ -41,7 +37,6 @@ class PharmacyProcessor:
             query=query,
             size=1000
         ):
-            # Transform CDC fields to expected format
             address_parts = [
                 doc.get("address1", ""),
                 doc.get("address2", ""),
@@ -54,7 +49,7 @@ class PharmacyProcessor:
 
             results.append({
                 "id": doc.get("id"),
-                "name": doc.get("host_name") or doc.get("name", ""),  # 약국명 우선, 없으면 개인명
+                "name": doc.get("host_name") or doc.get("name", ""),
                 "address": full_address,
                 "region": doc.get("region", ""),
                 "city": doc.get("city", ""),
@@ -69,15 +64,6 @@ class PharmacyProcessor:
         return results
 
     def _get_order_statistics_from_cdc(self, pharmacy_ids: set, days: int = 90) -> Dict[str, Dict[str, float]]:
-        """CDC ES에서 약국별 주문 통계 계산
-
-        Args:
-            pharmacy_ids: 약국 ID 집합
-            days: 통계 계산 기간 (일)
-
-        Returns:
-            약국 ID -> 주문 통계 매핑
-        """
         logger.info(f"Calculating order statistics for {len(pharmacy_ids)} pharmacies...")
 
         account_orders: Dict[str, List[Dict]] = defaultdict(list)
@@ -145,12 +131,6 @@ class PharmacyProcessor:
         return stats
 
     def process(self) -> Dict[str, Any]:
-        """
-        약국 데이터 전처리 실행 (CDC ES 데이터 사용)
-
-        Returns:
-            처리 결과 딕셔너리
-        """
         logger.info("Starting pharmacy (account) data preprocessing from CDC ES")
         start_time = datetime.now()
 
@@ -205,11 +185,6 @@ class PharmacyProcessor:
             }
 
     def _clean_data(self, df: pd.DataFrame) -> pd.DataFrame:
-        """
-        데이터 정제
-        - NULL 값 처리
-        - 텍스트 정규화
-        """
         logger.info("Cleaning pharmacy data")
 
         df = df.dropna(subset=["id", "name"]).copy()
@@ -226,10 +201,6 @@ class PharmacyProcessor:
         return df
 
     def _enrich_data(self, df: pd.DataFrame) -> pd.DataFrame:
-        """
-        데이터 보강
-        - 주소에서 지역 정보 추출
-        """
         logger.info("Enriching pharmacy data")
 
         if "address" in df.columns:
@@ -239,10 +210,6 @@ class PharmacyProcessor:
         return df
 
     def _validate_coordinates(self, df: pd.DataFrame) -> pd.DataFrame:
-        """
-        좌표 데이터 검증
-        - 위경도 범위 확인 (한국 범위)
-        """
         logger.info("Validating coordinates")
 
         korea_lat_range = (33.0, 43.0)
@@ -267,16 +234,6 @@ class PharmacyProcessor:
         df: pd.DataFrame,
         order_stats: Dict[str, Dict[str, float]]
     ) -> pd.DataFrame:
-        """
-        주문 통계를 약국 데이터에 병합
-
-        Args:
-            df: 약국 DataFrame
-            order_stats: 약국별 주문 통계
-
-        Returns:
-            통계가 병합된 DataFrame
-        """
         logger.info("Merging order statistics with pharmacy data")
 
         df["total_orders"] = 0
@@ -313,21 +270,10 @@ class PharmacyProcessor:
         return df
 
     def _index_to_es(self, df: pd.DataFrame, batch_size: int = 1000) -> int:
-        """
-        전처리된 약국 데이터를 ES에 인덱싱
-
-        Args:
-            df: 전처리된 DataFrame
-            batch_size: 배치 크기
-
-        Returns:
-            인덱싱된 문서 수
-        """
         logger.info(f"Indexing {len(df)} pharmacy records to ES")
 
         records = df.copy()
 
-        # pharmacy_id 필드 추가 (클러스터링 서비스 호환)
         if "id" in records.columns:
             records["pharmacy_id"] = records["id"]
 
@@ -361,26 +307,24 @@ class PharmacyProcessor:
         return total_indexed
 
     def _normalize_phone(self, phone: str) -> str:
-        """전화번호 정규화"""
         if not phone:
             return ""
 
         digits = re.sub(r"\D", "", phone)
 
-        if len(digits) == 11:  # 010-1234-5678
+        if len(digits) == 11:
             return f"{digits[:3]}-{digits[3:7]}-{digits[7:]}"
-        elif len(digits) == 10:  # 02-1234-5678 or 031-123-5678
+        elif len(digits) == 10:
             if digits.startswith("02"):
                 return f"{digits[:2]}-{digits[2:6]}-{digits[6:]}"
             else:
                 return f"{digits[:3]}-{digits[3:6]}-{digits[6:]}"
-        elif len(digits) == 9:  # 02-123-5678
+        elif len(digits) == 9:
             return f"{digits[:2]}-{digits[2:5]}-{digits[5:]}"
         else:
             return phone
 
     def _extract_sido(self, address: str) -> str:
-        """주소에서 시/도 추출"""
         if not address:
             return ""
 
@@ -419,7 +363,6 @@ class PharmacyProcessor:
         return ""
 
     def _extract_sigungu(self, address: str) -> str:
-        """주소에서 시/군/구 추출"""
         if not address:
             return ""
 
@@ -436,7 +379,6 @@ class PharmacyProcessor:
         return ""
 
     def get_pharmacies_with_stats(self) -> List[Dict[str, Any]]:
-        """통계 정보가 포함된 약국 데이터 조회 (약국 role: cu, bh만 포함) - CDC ES 사용"""
         logger.info("Fetching pharmacies with stats from CDC ES...")
 
         accounts = self._get_accounts_from_cdc()
@@ -461,7 +403,7 @@ class PharmacyProcessor:
                 "phone": account.get("phone", ""),
                 "order_count": stats.get("total_orders", 0),
                 "product_count": stats.get("unique_products", 0),
-                "total_qty": 0  # 별도 집계 필요 시 추가
+                "total_qty": 0
             })
 
         results.sort(key=lambda x: x["order_count"], reverse=True)
@@ -470,7 +412,6 @@ class PharmacyProcessor:
         return results
 
     def get_pharmacies_by_region(self, sido: Optional[str] = None) -> List[Dict[str, Any]]:
-        """지역별 약국 조회 - CDC ES 사용"""
         accounts = self._get_accounts_from_cdc()
         df = pd.DataFrame(accounts)
 
@@ -484,6 +425,5 @@ class PharmacyProcessor:
             df = df[df["region_sido"] == sido]
 
         return df.to_dict("records")
-
 
 pharmacy_processor = PharmacyProcessor()

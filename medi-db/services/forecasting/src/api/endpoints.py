@@ -1,4 +1,3 @@
-"""Forecasting API 엔드포인트"""
 import logging
 from typing import List, Optional
 
@@ -22,9 +21,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-
 class RankingRequest(BaseModel):
-    """랭킹 계산 요청"""
     days: int = 30
     category: Optional[str] = None
     top_n: Optional[int] = None
@@ -32,46 +29,31 @@ class RankingRequest(BaseModel):
     product_trend_weight: float = 0.3
     category_trend_weight: float = 0.1
 
-
 class RankingResponse(BaseModel):
-    """랭킹 계산 응답"""
     success: bool
     ranking_count: int
     message: str
 
-
 class ForecastResultResponse(BaseModel):
-    """예측 결과 조회 응답"""
     count: int
     results: List[ForecastingResult]
 
-
 class RankingResultResponse(BaseModel):
-    """랭킹 결과 조회 응답"""
     count: int
     results: List[RankingResult]
 
-
 class VectorRequest(BaseModel):
-    """벡터 생성 요청"""
-    entity_type: str = "product"  # "product" or "pharmacy"
+    entity_type: str = "product"
     days: int = 90
     trend_weight: float = 0.3
 
-
 class VectorResponse(BaseModel):
-    """벡터 생성 응답"""
     success: bool
     vector_count: int
     message: str
 
-
 @router.post("/forecast/run", response_model=ForecastResponse, tags=["Forecast"])
 async def run_forecast(request: ForecastRequest):
-    """수요예측 실행
-
-    시계열 분석을 통해 상품별 미래 수요를 예측합니다.
-    """
     try:
         forecaster = DemandForecaster()
 
@@ -100,16 +82,11 @@ async def run_forecast(request: ForecastRequest):
         logger.error(f"Forecast failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @router.get("/forecast/results", response_model=ForecastResultResponse, tags=["Forecast"])
 async def get_forecast_results(
     product_id: Optional[int] = Query(None, description="상품 ID 필터"),
     limit: int = Query(100, description="조회 개수", ge=1, le=1000)
 ):
-    """예측 결과 조회
-
-    저장된 수요예측 결과를 조회합니다.
-    """
     try:
         query = {"match_all": {}}
 
@@ -139,13 +116,8 @@ async def get_forecast_results(
         logger.error(f"Failed to get forecast results: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @router.post("/forecast/ranking", response_model=RankingResponse, tags=["Ranking"])
 async def run_ranking(request: RankingRequest):
-    """인기 의약품 랭킹 계산
-
-    판매량(60%) + 상품명 트렌드(30%) + 카테고리 트렌드(10%) 기반 랭킹
-    """
     try:
         calculator = RankingCalculator()
 
@@ -177,16 +149,11 @@ async def run_ranking(request: RankingRequest):
         logger.error(f"Ranking failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @router.get("/ranking/results", response_model=RankingResultResponse, tags=["Ranking"])
 async def get_ranking_results(
     category: Optional[str] = Query(None, description="카테고리 필터"),
     top_n: int = Query(100, description="상위 N개", ge=1, le=1000)
 ):
-    """랭킹 결과 조회
-
-    저장된 인기 의약품 랭킹 결과를 조회합니다.
-    """
     try:
         if category:
             query = {"term": {"category2": category}}
@@ -218,16 +185,11 @@ async def get_ranking_results(
         logger.error(f"Failed to get ranking results: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @router.get("/trend/emerging", tags=["Trend"])
 async def get_emerging_trends(
     days: int = Query(30, description="분석 기간"),
     min_momentum: float = Query(10.0, description="최소 모멘텀")
 ):
-    """급상승 트렌드 조회
-
-    최근 급상승 중인 트렌드 키워드를 조회합니다.
-    """
     try:
         extractor = TrendExtractor()
         trends = extractor.extract_emerging_trends(
@@ -244,13 +206,8 @@ async def get_emerging_trends(
         logger.error(f"Failed to get emerging trends: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @router.get("/trend/product/{product_id}", tags=["Trend"])
 async def get_product_trend(product_id: int):
-    """상품 트렌드 점수 조회
-
-    특정 상품의 트렌드 점수를 조회합니다.
-    """
     try:
         extractor = TrendExtractor()
         score = extractor.get_product_trend_score(product_id)
@@ -264,13 +221,8 @@ async def get_product_trend(product_id: int):
         logger.error(f"Failed to get product trend: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @router.post("/vector/generate", response_model=VectorResponse, tags=["Vector"])
 async def generate_vectors(request: VectorRequest):
-    """트렌드+주문 벡터 생성
-
-    상품 또는 약국의 특성 벡터를 생성합니다.
-    """
     try:
         generator = VectorGenerator()
 
@@ -307,16 +259,11 @@ async def generate_vectors(request: VectorRequest):
         logger.error(f"Vector generation failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @router.get("/vector/similar/{product_id}", tags=["Vector"])
 async def find_similar_products(
     product_id: int,
     top_n: int = Query(10, description="상위 N개", ge=1, le=100)
 ):
-    """유사 상품 조회
-
-    특정 상품과 유사한 상품을 조회합니다.
-    """
     try:
         generator = VectorGenerator()
         similar = generator.find_similar_products(product_id, top_n=top_n)

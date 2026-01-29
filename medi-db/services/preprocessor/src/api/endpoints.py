@@ -1,4 +1,3 @@
-"""API 엔드포인트 정의"""
 import logging
 from fastapi import APIRouter, HTTPException
 
@@ -14,14 +13,8 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-
 @router.get("/health", response_model=HealthResponse)
 async def health_check():
-    """
-    헬스체크 엔드포인트
-
-    서비스 상태 및 의존성(Elasticsearch) 연결 상태를 확인합니다.
-    """
     es_healthy = es_client.health_check()
 
     status = "healthy" if es_healthy else "unhealthy"
@@ -34,15 +27,8 @@ async def health_check():
         }
     )
 
-
 @router.post("/preprocess/all", response_model=PreprocessResponse)
 async def preprocess_all():
-    """
-    전체 전처리 실행
-
-    주문, 상품, 약국 데이터를 순차적으로 전처리하고
-    키워드 추출 및 트렌드 매핑을 수행합니다.
-    """
     logger.info("Starting full preprocessing pipeline")
 
     results = {
@@ -90,17 +76,8 @@ async def preprocess_all():
             detail=f"Preprocessing failed: {str(e)}"
         )
 
-
 @router.post("/preprocess/orders", response_model=PreprocessResponse)
 async def preprocess_orders():
-    """
-    주문 데이터 전처리
-
-    orders_detail 및 orders 테이블의 데이터를 전처리합니다.
-    - NULL 값 처리
-    - 이상치 제거
-    - 파생 변수 생성 (총 금액, 날짜 분리 등)
-    """
     logger.info("Starting order data preprocessing")
 
     try:
@@ -119,18 +96,8 @@ async def preprocess_orders():
             detail=f"Order preprocessing failed: {str(e)}"
         )
 
-
 @router.post("/preprocess/products", response_model=PreprocessResponse)
 async def preprocess_products():
-    """
-    상품 데이터 전처리
-
-    product 테이블의 데이터를 전처리합니다.
-    - 텍스트 정규화
-    - 카테고리 매핑
-    - 상품명/성분명 정규화
-    - 키워드 추출 및 트렌드 매핑
-    """
     logger.info("Starting product data preprocessing")
 
     try:
@@ -149,18 +116,8 @@ async def preprocess_products():
             detail=f"Product preprocessing failed: {str(e)}"
         )
 
-
 @router.post("/preprocess/accounts", response_model=PreprocessResponse)
 async def preprocess_accounts():
-    """
-    약국 데이터 전처리
-
-    account 테이블의 데이터를 전처리합니다.
-    - 텍스트 정규화
-    - 전화번호 정규화
-    - 주소에서 지역 정보 추출
-    - 좌표 유효성 검증
-    """
     logger.info("Starting pharmacy (account) data preprocessing")
 
     try:
@@ -179,18 +136,8 @@ async def preprocess_accounts():
             detail=f"Pharmacy preprocessing failed: {str(e)}"
         )
 
-
 @router.post("/keywords/extract")
 async def extract_keywords():
-    """
-    키워드 추출 (트렌드 매핑 없이)
-
-    모든 상품에서 키워드를 추출하고 통계를 반환합니다.
-    - name: 상품명에서 추출한 키워드
-    - efficacy: 효능에서 추출한 키워드
-    - ingredient: 성분에서 추출한 키워드
-    - category: 카테고리 코드에서 매핑된 키워드
-    """
     try:
         result = keyword_extractor.extract_all_keywords()
         return result
@@ -202,14 +149,8 @@ async def extract_keywords():
             detail=f"Keyword extraction failed: {str(e)}"
         )
 
-
 @router.get("/products/summary")
 async def get_products_summary():
-    """
-    상품 판매 요약 조회
-
-    상품별 판매 통계를 반환합니다.
-    """
     try:
         summary = order_processor.get_product_sales_summary()
         return {
@@ -225,14 +166,8 @@ async def get_products_summary():
             detail=f"Failed to get product summary: {str(e)}"
         )
 
-
 @router.get("/pharmacies/summary")
 async def get_pharmacies_summary():
-    """
-    약국 구매 요약 조회
-
-    약국별 구매 통계를 반환합니다.
-    """
     try:
         summary = order_processor.get_pharmacy_purchase_summary()
         return {

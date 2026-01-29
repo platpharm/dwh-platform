@@ -1,4 +1,3 @@
-"""PP주문데이터 전처리 프로세서"""
 import logging
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
@@ -12,15 +11,12 @@ from shared.config import ESIndex
 
 logger = logging.getLogger(__name__)
 
-
 class OrderProcessor:
-    """주문 데이터 전처리 클래스 (CDC ES 데이터 사용)"""
 
     def __init__(self):
         self.es = es_client
 
     def _get_orders_detail_from_cdc(self, limit: Optional[int] = None) -> List[Dict[str, Any]]:
-        """CDC ES에서 주문 상세 데이터 조회 (약국 role: cu, bh만 포함)"""
         logger.info("Fetching orders detail from CDC ES...")
 
         pharmacy_ids = self._get_pharmacy_ids_from_cdc()
@@ -62,7 +58,6 @@ class OrderProcessor:
         return results
 
     def _get_pharmacy_ids_from_cdc(self) -> set:
-        """CDC ES에서 약국 ID 목록 조회 (role: CU, BH)"""
         query = {
             "bool": {
                 "must": [
@@ -87,15 +82,6 @@ class OrderProcessor:
         return pharmacy_ids
 
     def process(self, limit: Optional[int] = None) -> Dict[str, Any]:
-        """
-        주문 데이터 전처리 실행 (CDC ES 데이터 사용)
-
-        Args:
-            limit: 처리할 최대 레코드 수 (None이면 전체)
-
-        Returns:
-            처리 결과 딕셔너리
-        """
         logger.info("Starting order data preprocessing from CDC ES")
         start_time = datetime.now()
 
@@ -146,12 +132,6 @@ class OrderProcessor:
             }
 
     def _clean_data(self, df: pd.DataFrame) -> pd.DataFrame:
-        """
-        데이터 정제
-        - NULL 값 처리
-        - 이상치 제거
-        - 데이터 타입 변환
-        """
         logger.info("Cleaning order data")
 
         df = df.dropna(subset=["order_id", "product_id"]).copy()
@@ -171,11 +151,6 @@ class OrderProcessor:
         return df
 
     def _enrich_data(self, df: pd.DataFrame) -> pd.DataFrame:
-        """
-        데이터 보강
-        - 파생 변수 생성
-        - 외부 데이터 조인
-        """
         logger.info("Enriching order data")
 
         if "order_qty" in df.columns and "order_price" in df.columns:
@@ -192,17 +167,11 @@ class OrderProcessor:
         return df
 
     def _aggregate_data(self, df: pd.DataFrame) -> pd.DataFrame:
-        """
-        데이터 집계
-        - 상품별 판매 통계
-        - 약국별 구매 통계
-        """
         logger.info("Aggregating order data")
 
         return df
 
     def _serialize_value(self, value):
-        """값을 JSON 직렬화 가능한 형태로 변환"""
         if value is None:
             return None
         if isinstance(value, (list, dict)):
@@ -212,21 +181,11 @@ class OrderProcessor:
                 return None
         except (ValueError, TypeError):
             pass
-        if hasattr(value, 'isoformat'):  # datetime, date, Timestamp
+        if hasattr(value, 'isoformat'):
             return value.isoformat()
         return value
 
     def _index_to_es(self, df: pd.DataFrame, batch_size: int = 5000) -> int:
-        """
-        전처리된 주문 데이터를 ES에 인덱싱
-
-        Args:
-            df: 전처리된 DataFrame
-            batch_size: 배치 크기
-
-        Returns:
-            인덱싱된 문서 수
-        """
         logger.info(f"Indexing {len(df)} order records to ES")
 
         records = df.copy()
@@ -262,7 +221,7 @@ class OrderProcessor:
                 success, failed = self.es.bulk_index(
                     index=ESIndex.PREPROCESSED_ORDER,
                     documents=batch,
-                    id_field=None  # 자동 ID 생성
+                    id_field=None
                 )
                 total_indexed += success
                 if failed:
@@ -279,7 +238,6 @@ class OrderProcessor:
         return total_indexed
 
     def get_product_sales_summary(self) -> List[Dict[str, Any]]:
-        """상품별 판매 요약 조회 (약국 role: cu, bh만 포함) - CDC ES 사용"""
         logger.info("Calculating product sales summary from CDC ES...")
 
         pharmacy_ids = self._get_pharmacy_ids_from_cdc()
@@ -341,7 +299,6 @@ class OrderProcessor:
         return results
 
     def _get_product_names_from_cdc(self) -> Dict[str, str]:
-        """CDC ES에서 상품 ID -> 이름 매핑 조회"""
         query = {
             "bool": {
                 "must_not": [
@@ -362,7 +319,6 @@ class OrderProcessor:
         return product_names
 
     def _get_account_names_from_cdc(self, pharmacy_ids: set) -> Dict[str, str]:
-        """CDC ES에서 약국 ID -> 이름 매핑 조회"""
         query = {
             "bool": {
                 "must": [
@@ -386,7 +342,6 @@ class OrderProcessor:
         return account_names
 
     def get_pharmacy_purchase_summary(self) -> List[Dict[str, Any]]:
-        """약국별 구매 요약 조회 (약국 role: cu, bh만 포함) - CDC ES 사용"""
         logger.info("Calculating pharmacy purchase summary from CDC ES...")
 
         pharmacy_ids = self._get_pharmacy_ids_from_cdc()
@@ -446,6 +401,5 @@ class OrderProcessor:
 
         logger.info(f"Calculated purchase summary for {len(results)} pharmacies")
         return results
-
 
 order_processor = OrderProcessor()

@@ -1,4 +1,3 @@
-"""Targeting Service API 엔드포인트"""
 
 from typing import Any, Dict, List, Optional
 
@@ -14,19 +13,8 @@ from src.matcher.product_pharmacy_matcher import product_pharmacy_matcher
 
 router = APIRouter()
 
-
 @router.post("/target/run", response_model=TargetResponse)
 async def run_targeting(request: TargetRequest) -> TargetResponse:
-    """타겟팅 실행
-
-    클러스터링 및 랭킹 결과를 기반으로 의약품-약국 매칭을 수행합니다.
-
-    Args:
-        request: 타겟팅 요청 (top_n_products, top_n_pharmacies)
-
-    Returns:
-        타겟팅 실행 결과
-    """
     try:
         result = product_pharmacy_matcher.run_targeting(
             top_n_products=request.top_n_products,
@@ -45,21 +33,10 @@ async def run_targeting(request: TargetRequest) -> TargetResponse:
             detail=f"타겟팅 실행 중 오류 발생: {str(e)}"
         )
 
-
 @router.get("/target/results")
 async def get_targeting_results(
     limit: int = Query(default=100, ge=1, le=1000, description="최대 결과 수")
 ) -> Dict[str, Any]:
-    """타겟팅 결과 조회
-
-    저장된 타겟팅 결과를 조회합니다.
-
-    Args:
-        limit: 최대 결과 수
-
-    Returns:
-        타겟팅 결과 리스트
-    """
     try:
         results = product_pharmacy_matcher.get_targeting_results(limit=limit)
 
@@ -75,23 +52,11 @@ async def get_targeting_results(
             detail=f"결과 조회 중 오류 발생: {str(e)}"
         )
 
-
 @router.get("/target/product/{product_id}")
 async def get_target_pharmacies(
     product_id: int,
     limit: int = Query(default=50, ge=1, le=500, description="최대 결과 수")
 ) -> Dict[str, Any]:
-    """특정 상품의 타겟 약국 조회
-
-    특정 상품에 대해 추천된 약국 목록을 조회합니다.
-
-    Args:
-        product_id: 상품 ID
-        limit: 최대 결과 수
-
-    Returns:
-        추천 약국 리스트
-    """
     try:
         results = product_pharmacy_matcher.get_targeting_results(
             product_id=product_id,
@@ -107,7 +72,6 @@ async def get_target_pharmacies(
                 "message": "해당 상품에 대한 타겟팅 결과가 없습니다"
             }
 
-        # 약국 정보만 추출
         pharmacies = [
             {
                 "pharmacy_id": r["pharmacy_id"],
@@ -135,23 +99,11 @@ async def get_target_pharmacies(
             detail=f"타겟 약국 조회 중 오류 발생: {str(e)}"
         )
 
-
 @router.get("/target/pharmacy/{pharmacy_id}")
 async def get_recommended_products(
     pharmacy_id: int,
     limit: int = Query(default=50, ge=1, le=500, description="최대 결과 수")
 ) -> Dict[str, Any]:
-    """특정 약국의 추천 상품 조회
-
-    특정 약국에 대해 추천된 상품 목록을 조회합니다.
-
-    Args:
-        pharmacy_id: 약국 ID
-        limit: 최대 결과 수
-
-    Returns:
-        추천 상품 리스트
-    """
     try:
         results = product_pharmacy_matcher.get_targeting_results(
             pharmacy_id=pharmacy_id,
@@ -167,7 +119,6 @@ async def get_recommended_products(
                 "message": "해당 약국에 대한 추천 상품이 없습니다"
             }
 
-        # 상품 정보만 추출
         products = [
             {
                 "product_id": r["product_id"],
@@ -194,16 +145,8 @@ async def get_recommended_products(
             detail=f"추천 상품 조회 중 오류 발생: {str(e)}"
         )
 
-
 @router.get("/health", response_model=HealthResponse)
 async def health_check() -> HealthResponse:
-    """헬스체크
-
-    서비스 및 의존성 상태를 확인합니다.
-
-    Returns:
-        헬스체크 결과
-    """
     es_healthy = es_client.health_check()
 
     dependencies = {

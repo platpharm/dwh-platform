@@ -1,4 +1,3 @@
-"""수요예측 차트 페이지"""
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
@@ -9,13 +8,11 @@ from elasticsearch.exceptions import NotFoundError
 from shared.clients.es_client import es_client
 from shared.config import ESIndex
 
-
 def fetch_forecast_data(
     product_id: str = None,
     model_type: str = None,
     limit: int = 100
 ) -> List[Dict[str, Any]]:
-    """ES에서 수요예측 결과 조회"""
     must_clauses = []
 
     if product_id:
@@ -45,9 +42,7 @@ def fetch_forecast_data(
         st.error(f"데이터 조회 실패: {e}")
         return []
 
-
 def create_forecast_chart(df: pd.DataFrame) -> go.Figure:
-    """시계열 예측 그래프 생성 (신뢰구간 포함)"""
     fig = go.Figure()
 
     if "actual" in df.columns:
@@ -105,9 +100,7 @@ def create_forecast_chart(df: pd.DataFrame) -> go.Figure:
 
     return fig
 
-
 def create_error_metrics_chart(df: pd.DataFrame) -> go.Figure:
-    """예측 오차 메트릭 시각화"""
     if "actual" not in df.columns or "forecast" not in df.columns:
         return None
 
@@ -134,9 +127,7 @@ def create_error_metrics_chart(df: pd.DataFrame) -> go.Figure:
 
     return fig
 
-
 def calculate_metrics(df: pd.DataFrame) -> Dict[str, float]:
-    """예측 정확도 메트릭 계산"""
     if "actual" not in df.columns or "forecast" not in df.columns:
         return {}
 
@@ -160,9 +151,7 @@ def calculate_metrics(df: pd.DataFrame) -> Dict[str, float]:
         "MAPE (%)": mape,
     }
 
-
 def render_page():
-    """수요예측 차트 페이지 렌더링"""
     st.title("수요예측 차트")
     st.markdown("---")
 
@@ -264,7 +253,6 @@ def render_page():
             st.info("조회된 데이터가 없습니다. ES 인덱스를 확인해주세요.")
     else:
         st.info("'예측 결과 조회' 버튼을 클릭하여 수요예측 결과를 확인하세요.")
-
 
 if __name__ == "__main__":
     render_page()

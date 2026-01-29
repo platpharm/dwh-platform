@@ -1,7 +1,3 @@
-"""
-MediDB 수요예측 전용 DAG
-수동 실행용: 수요예측 및 랭킹 계산 독립 실행
-"""
 from datetime import datetime, timedelta
 from airflow import DAG
 from airflow.providers.http.operators.http import SimpleHttpOperator
@@ -20,7 +16,7 @@ with DAG(
     'medi_db_forecasting_only',
     default_args=default_args,
     description='MediDB 수요예측 단독 실행',
-    schedule_interval=None,  # 수동 실행
+    schedule_interval=None,
     start_date=datetime(2025, 1, 1),
     catchup=False,
     tags=['medi-db', 'forecasting'],

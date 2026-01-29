@@ -1,4 +1,3 @@
-"""클러스터링 API 엔드포인트"""
 import logging
 from datetime import datetime
 from typing import Dict, Any, Optional, List
@@ -26,17 +25,13 @@ router = APIRouter()
 
 clustering_jobs: Dict[str, Dict[str, Any]] = {}
 
-
 def _label_encode(values: List[Optional[str]]) -> List[int]:
-    """문자열 리스트를 정수로 라벨 인코딩 (None은 빈 문자열로 치환)"""
     cleaned = [v if v is not None else "" for v in values]
     unique = sorted(set(cleaned))
     mapping = {v: i for i, v in enumerate(unique)}
     return [mapping[v] for v in cleaned]
 
-
 def _fetch_order_stats_by_product() -> Dict[str, Dict[str, float]]:
-    """orders_detail에서 상품별 주문 통계 집계"""
     aggs = {
         "by_product": {
             "terms": {
@@ -72,10 +67,7 @@ def _fetch_order_stats_by_product() -> Dict[str, Dict[str, float]]:
         logger.warning(f"Failed to fetch order stats: {e}")
         return {}
 
-
 def _fetch_kims_data() -> Dict[str, Dict[str, str]]:
-    """KIMS 매핑 + KIMS 약품 데이터 조회 → product_id별 성분/분류 정보"""
-    # 1) product_kims_mapping: product_id → kims_drug_code
     product_kims_map = {}
     kims_codes_needed = set()
     try:
@@ -98,7 +90,6 @@ def _fetch_kims_data() -> Dict[str, Dict[str, str]]:
     if not kims_codes_needed:
         return {}
 
-    # 2) kims_edis_indexdb: DrugCode → ATCCode, KIMSClsCode1, MOHCls, Composition
     kims_info = {}
     try:
         for doc in es_client.scroll_search(
@@ -120,7 +111,6 @@ def _fetch_kims_data() -> Dict[str, Dict[str, str]]:
 
     logger.info(f"Loaded KIMS info for {len(kims_info)} drugs")
 
-    # 3) product_id → KIMS 정보 매핑
     result = {}
     for pid, kcode in product_kims_map.items():
         if kcode in kims_info:
@@ -129,17 +119,7 @@ def _fetch_kims_data() -> Dict[str, Dict[str, str]]:
     logger.info(f"Matched {len(result)} products with KIMS data")
     return result
 
-
 def _fetch_product_data() -> tuple:
-    """ES에서 상품 데이터 조회 (다차원 피처)
-
-    데이터 소스:
-    - TREND_PRODUCT_MAPPING: trend_score, match_score
-    - CDC_PRODUCT: 상품명, 카테고리, 가격, 상품유형, 제조사
-    - CDC_ORDERS_DETAIL: 주문수량, 매출액, 구매 약국 수
-    - KIMS: ATC 분류, KIMS 분류, 보건부 분류
-    """
-    # 1) TREND_PRODUCT_MAPPING
     trend_data = {}
     for p in es_client.scroll_search(
         index=ESIndex.TREND_PRODUCT_MAPPING,
@@ -155,7 +135,6 @@ def _fetch_product_data() -> tuple:
 
     logger.info(f"Loaded {len(trend_data)} products from TREND_PRODUCT_MAPPING")
 
-    # 2) CDC_PRODUCT
     product_info = {}
     for p in es_client.scroll_search(
         index=ESIndex.CDC_PRODUCT,
@@ -176,17 +155,13 @@ def _fetch_product_data() -> tuple:
 
     logger.info(f"Loaded {len(product_info)} products from CDC_PRODUCT")
 
-    # 3) 주문 통계 집계
     order_stats = _fetch_order_stats_by_product()
 
-    # 4) KIMS 성분/분류 데이터
     kims_data = _fetch_kims_data()
 
-    # 5) 피처 조합 (trend_data에 있는 상품 기준)
     ids = []
     raw_data_list = []
 
-    # 카테고리/분류 라벨 인코딩을 위한 수집
     cat1_values = []
     cat2_values = []
     product_kind_values = []
@@ -208,22 +183,18 @@ def _fetch_product_data() -> tuple:
         raw = {
             "product_id": product_id,
             "product_name": product_name,
-            # trend
             "trend_score": float(scores.get("trend_score") or 0),
             "match_score": float(scores.get("match_score") or 0),
-            # product
             "category1": info.get("category1") or "",
             "category2": info.get("category2") or "",
             "category3": info.get("category3") or "",
             "price": float(info.get("price") or 0),
             "product_kind": info.get("product_kind") or "",
             "mfr_name": info.get("mfr_name") or "",
-            # order
             "total_order_qty": float(orders.get("total_order_qty") or 0),
             "total_order_amount": float(orders.get("total_order_amount") or 0),
             "unique_buyers": float(orders.get("unique_buyers") or 0),
             "avg_order_price": float(orders.get("avg_order_price") or 0),
-            # kims
             "atc_code": kims.get("atc_code") or "",
             "kims_cls_code": kims.get("kims_cls_code") or "",
             "composition": kims.get("composition") or "",
@@ -241,7 +212,6 @@ def _fetch_product_data() -> tuple:
     if not ids:
         return [], [], []
 
-    # 라벨 인코딩
     cat1_encoded = _label_encode(cat1_values)
     cat2_encoded = _label_encode(cat2_values)
     kind_encoded = _label_encode(product_kind_values)
@@ -249,11 +219,9 @@ def _fetch_product_data() -> tuple:
     atc_encoded = _label_encode(atc_values)
     kims_encoded = _label_encode(kims_cls_values)
 
-    # 수치 피처 + 인코딩된 범주형 피처
     features = []
     for i, raw in enumerate(raw_data_list):
         feature_vector = [
-            # 수치형 피처
             raw["trend_score"],
             raw["match_score"],
             raw["price"],
@@ -261,7 +229,6 @@ def _fetch_product_data() -> tuple:
             raw["total_order_amount"],
             raw["unique_buyers"],
             raw["avg_order_price"],
-            # 인코딩된 범주형 피처
             float(cat1_encoded[i]),
             float(cat2_encoded[i]),
             float(kind_encoded[i]),
@@ -278,9 +245,7 @@ def _fetch_product_data() -> tuple:
 
     return ids, np.array(features), raw_data_list
 
-
 def _fetch_pharmacy_data() -> tuple:
-    """ES에서 약국 데이터 조회 (전처리된 데이터)"""
     query = {"match_all": {}}
 
     try:
@@ -314,22 +279,20 @@ def _fetch_pharmacy_data() -> tuple:
 
     return ids, np.array(features), raw_data
 
-
 def _save_clustering_results(
     entity_type: str,
-    entity_ids: List,  # int for products, str for pharmacies
+    entity_ids: List,
     algorithm: str,
     cluster_results: List[Dict[str, Any]],
     raw_data: List[Dict[str, Any]]
 ) -> int:
-    """클러스터링 결과를 ES에 저장"""
     timestamp = datetime.utcnow()
     documents = []
 
     for i, (entity_id, result, raw) in enumerate(zip(entity_ids, cluster_results, raw_data)):
         if entity_type == "product":
             entity_name = raw.get("product_name") or raw.get("name")
-        else:  # pharmacy
+        else:
             entity_name = raw.get("name") or raw.get("host_name")
 
         if not entity_name:
@@ -369,13 +332,11 @@ def _save_clustering_results(
 
     return success
 
-
 def _run_clustering(
     algorithm: str,
     entity_type: str,
     params: Optional[Dict[str, Any]] = None
 ) -> Dict[str, Any]:
-    """클러스터링 실행 로직"""
     params = params or {}
 
     if entity_type == "product":
@@ -441,15 +402,8 @@ def _run_clustering(
         "summary": summary
     }
 
-
 @router.post("/cluster/run", response_model=ClusterResponse)
 async def run_clustering(request: ClusterRequest):
-    """
-    클러스터링 실행
-
-    - algorithm: hdbscan, k_prototype, gmm, minibatch_kmeans
-    - entity_type: product, pharmacy
-    """
     try:
         result = _run_clustering(
             algorithm=request.algorithm,
@@ -469,7 +423,6 @@ async def run_clustering(request: ClusterRequest):
         logger.error(f"Clustering error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @router.post("/cluster/hdbscan", response_model=ClusterResponse)
 async def run_hdbscan(
     entity_type: str = "product",
@@ -477,7 +430,6 @@ async def run_hdbscan(
     min_samples: Optional[int] = None,
     use_umap: bool = True
 ):
-    """HDBSCAN 클러스터링 실행"""
     try:
         result = _run_clustering(
             algorithm="hdbscan",
@@ -499,14 +451,12 @@ async def run_hdbscan(
         logger.error(f"HDBSCAN error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @router.post("/cluster/gmm", response_model=ClusterResponse)
 async def run_gmm(
     entity_type: str = "product",
     n_components: int = 5,
     covariance_type: str = "full"
 ):
-    """GMM 클러스터링 실행"""
     try:
         result = _run_clustering(
             algorithm="gmm",
@@ -527,14 +477,12 @@ async def run_gmm(
         logger.error(f"GMM error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @router.post("/cluster/kmeans", response_model=ClusterResponse)
 async def run_kmeans(
     entity_type: str = "product",
     n_clusters: int = 8,
     batch_size: int = 1024
 ):
-    """Mini-Batch K-Means 클러스터링 실행"""
     try:
         result = _run_clustering(
             algorithm="minibatch_kmeans",
@@ -555,7 +503,6 @@ async def run_kmeans(
         logger.error(f"K-Means error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @router.get("/cluster/results")
 async def get_clustering_results(
     entity_type: Optional[str] = None,
@@ -563,13 +510,6 @@ async def get_clustering_results(
     cluster_id: Optional[int] = None,
     size: int = 100
 ):
-    """
-    클러스터링 결과 조회
-
-    - entity_type: product, pharmacy (선택)
-    - algorithm: hdbscan, k_prototype, gmm, minibatch_kmeans (선택)
-    - cluster_id: 특정 클러스터 ID (선택)
-    """
     try:
         must_clauses = []
         if entity_type:
@@ -606,10 +546,8 @@ async def get_clustering_results(
         logger.error(f"Error fetching results: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @router.get("/health", response_model=HealthResponse)
 async def health_check():
-    """헬스체크"""
     es_healthy = es_client.health_check()
 
     return HealthResponse(

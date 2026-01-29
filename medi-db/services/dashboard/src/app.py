@@ -1,4 +1,3 @@
-"""DWH Dashboard - Streamlit 메인 애플리케이션"""
 import streamlit as st
 
 st.set_page_config(
@@ -27,7 +26,6 @@ if page == "홈":
     st.markdown("---")
 
     st.markdown("""
-    ### 대시보드 기능 안내
 
     **1. 클러스터링 시각화**
     - UMAP 2D 산점도로 상품/약국 클러스터 시각화

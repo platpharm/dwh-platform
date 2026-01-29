@@ -1,4 +1,3 @@
-"""네이버 데이터랩 검색어 트렌드 크롤러"""
 
 import logging
 import os
@@ -42,9 +41,7 @@ CATEGORY2_MAPPING = {
     "20": "기타의약품",
 }
 
-
 class NaverTrendsCrawler:
-    """네이버 데이터랩 검색어 트렌드 크롤러 (NCP API Gateway)"""
 
     def __init__(self):
         self.client_id = os.getenv("NAVER_CLIENT_ID", "")
@@ -95,7 +92,6 @@ class NaverTrendsCrawler:
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
     ) -> Dict[str, Dict[str, float]]:
-        """키워드별 시간에 따른 검색 트렌드 데이터 가져오기"""
         start_date, end_date = self._get_date_range(start_date, end_date)
         results: Dict[str, Dict[str, float]] = {}
 
@@ -153,7 +149,6 @@ class NaverTrendsCrawler:
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
     ) -> int:
-        """크롤링 후 ES에 저장"""
         interest_data = self.fetch_interest_over_time(keywords, start_date, end_date)
 
         trend_data_list = self._parse_trend_data(interest_data)
@@ -210,7 +205,6 @@ class NaverTrendsCrawler:
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
     ) -> Tuple[Dict[str, Dict[str, float]], List[Dict]]:
-        """상품명 트렌드와 카테고리 트렌드를 독립적으로 수집"""
         logger.info(f"[Naver] Fetching trends for {len(products)} products")
 
         product_keywords: Dict[str, List[int]] = {}
@@ -312,7 +306,6 @@ class NaverTrendsCrawler:
         end_date: Optional[str] = None,
         products: Optional[List[Dict[str, Any]]] = None,
     ) -> Dict[str, Any]:
-        """상품명 기반 네이버 트렌드 크롤링 후 ES에 저장"""
         logger.info(f"[Naver] Starting product-based trend crawling")
 
         if products is None:
@@ -372,6 +365,5 @@ class NaverTrendsCrawler:
             "unique_keywords": len(interest_data),
             "message": f"[Naver] 트렌드 {trend_count}건, 매핑 {mapping_count}건 저장",
         }
-
 
 naver_crawler = NaverTrendsCrawler()

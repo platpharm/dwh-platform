@@ -1,4 +1,3 @@
-"""의약품 데이터 전처리 프로세서"""
 import logging
 import re
 from datetime import datetime
@@ -11,8 +10,6 @@ from shared.config import ESIndex
 
 logger = logging.getLogger(__name__)
 
-
-# 카테고리2 코드 매핑
 CATEGORY2_MAPPING = {
     "01": "해열진통소염제",
     "02": "항히스타민제",
@@ -36,15 +33,12 @@ CATEGORY2_MAPPING = {
     "20": "기타의약품",
 }
 
-
 class ProductProcessor:
-    """상품 데이터 전처리 클래스 (CDC ES 데이터 사용)"""
 
     def __init__(self):
         self.es = es_client
 
     def _get_products_from_cdc(self) -> List[Dict[str, Any]]:
-        """CDC ES에서 상품 데이터 조회"""
         logger.info("Fetching products from CDC ES...")
 
         query = {
@@ -80,7 +74,6 @@ class ProductProcessor:
         return results
 
     def _get_vendors_from_cdc(self) -> List[Dict[str, Any]]:
-        """CDC ES에서 도매사 데이터 조회 (account 인덱스에서 vendor role 조회)"""
         logger.info("Fetching vendors from CDC ES...")
 
         query = {
@@ -113,17 +106,10 @@ class ProductProcessor:
         return results
 
     def process(self) -> Dict[str, Any]:
-        """
-        상품 데이터 전처리 실행 (CDC ES 데이터 사용)
-
-        Returns:
-            처리 결과 딕셔너리
-        """
         logger.info("Starting product data preprocessing from CDC ES")
         start_time = datetime.now()
 
         try:
-            # CDC ES에서 상품 데이터 조회
             products = self._get_products_from_cdc()
 
             if not products:
@@ -134,18 +120,15 @@ class ProductProcessor:
                     "message": "No product data to process"
                 }
 
-            # DataFrame으로 변환
             df = pd.DataFrame(products)
             original_count = len(df)
 
-            # 전처리 수행
             df = self._clean_data(df)
             df = self._enrich_data(df)
             df = self._normalize_data(df)
 
             processed_count = len(df)
 
-            # 전처리된 데이터를 ES에 인덱싱
             indexed_count = self._index_to_es(df)
 
             elapsed = (datetime.now() - start_time).total_seconds()
@@ -173,17 +156,10 @@ class ProductProcessor:
             }
 
     def _clean_data(self, df: pd.DataFrame) -> pd.DataFrame:
-        """
-        데이터 정제
-        - NULL 값 처리
-        - 텍스트 정규화
-        """
         logger.info("Cleaning product data")
 
-        # 필수 필드 NULL 제거
         df = df.dropna(subset=["id", "name"])
 
-        # 텍스트 필드 정제
         text_columns = ["name", "efficacy", "ingredient"]
         for col in text_columns:
             if col in df.columns:
@@ -192,21 +168,14 @@ class ProductProcessor:
         return df
 
     def _enrich_data(self, df: pd.DataFrame) -> pd.DataFrame:
-        """
-        데이터 보강
-        - 카테고리 매핑
-        - 도매사 정보 조인 (CDC 인덱스 가용 시)
-        """
         logger.info("Enriching product data")
 
-        # 카테고리2 코드를 카테고리명으로 매핑
         if "category2" in df.columns:
             df["category2_name"] = df["category2"].apply(
                 lambda x: CATEGORY2_MAPPING.get(str(x).strip().zfill(2), "기타")
                 if pd.notna(x) and str(x).strip() != "" else "기타"
             )
 
-        # 도매사 정보 조인 (CDC account 인덱스에서)
         vendors = self._get_vendors_from_cdc()
         if vendors:
             vendor_df = pd.DataFrame(vendors)
@@ -218,18 +187,11 @@ class ProductProcessor:
         return df
 
     def _normalize_data(self, df: pd.DataFrame) -> pd.DataFrame:
-        """
-        데이터 정규화
-        - 상품명 정규화
-        - 성분명 정규화
-        """
         logger.info("Normalizing product data")
 
-        # 상품명에서 용량/규격 분리
         if "name" in df.columns:
             df["name_normalized"] = df["name"].apply(self._normalize_product_name)
 
-        # 성분명 정규화
         if "ingredient" in df.columns:
             df["ingredient_normalized"] = df["ingredient"].apply(
                 self._normalize_ingredient
@@ -238,16 +200,6 @@ class ProductProcessor:
         return df
 
     def _index_to_es(self, df: pd.DataFrame, batch_size: int = 1000) -> int:
-        """
-        전처리된 상품 데이터를 ES에 인덱싱
-
-        Args:
-            df: 전처리된 DataFrame
-            batch_size: 배치 크기
-
-        Returns:
-            인덱싱된 문서 수
-        """
         logger.info(f"Indexing {len(df)} product records to ES")
 
         records = df.copy()
@@ -285,45 +237,31 @@ class ProductProcessor:
         return total_indexed
 
     def _normalize_product_name(self, name: str) -> str:
-        """상품명 정규화"""
         if not name:
             return ""
 
-        # 괄호 내용 제거
         normalized = re.sub(r"\([^)]*\)", "", name)
-        # 숫자+단위 제거 (예: 100mg, 50ml, 500mcg)
         normalized = re.sub(r"\d+\.?\d*\s*(mg|ml|g|L|mcg|iu|정|캡슐|포|개|%)", "", normalized, flags=re.IGNORECASE)
-        # 특수문자 제거 (한글, 영문, 숫자, 공백 유지)
         normalized = re.sub(r"[^\w\s가-힣a-zA-Z]", "", normalized)
-        # 연속 공백 제거
         normalized = re.sub(r"\s+", " ", normalized).strip()
 
         return normalized
 
     def _normalize_ingredient(self, ingredient: str) -> str:
-        """성분명 정규화"""
         if not ingredient:
             return ""
 
-        # 괄호 내용 제거
         normalized = re.sub(r"\([^)]*\)", "", ingredient)
-        # 숫자+단위 제거
         normalized = re.sub(r"\d+\.?\d*\s*(mg|ml|g|mcg|iu|%)", "", normalized, flags=re.IGNORECASE)
-        # 특수문자 제거 (쉼표는 유지, 한글/영문/숫자 유지)
         normalized = re.sub(r"[^\w\s가-힣a-zA-Z,]", "", normalized)
-        # 연속 공백 제거
         normalized = re.sub(r"\s+", " ", normalized).strip()
 
         return normalized
 
     def get_products_with_keywords(self) -> List[Dict[str, Any]]:
-        """키워드 추출용 상품 데이터 조회 (CDC ES에서)"""
         return self._get_products_from_cdc()
 
     def get_category_mapping(self) -> Dict[str, str]:
-        """카테고리2 코드 매핑 반환"""
         return CATEGORY2_MAPPING.copy()
 
-
-# 싱글톤 인스턴스
 product_processor = ProductProcessor()

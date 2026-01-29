@@ -1,4 +1,3 @@
-"""키워드 추출 및 트렌드 매핑 프로세서"""
 import logging
 import re
 from datetime import datetime
@@ -9,7 +8,6 @@ from shared.config import ESIndex
 from shared.models.schemas import TrendProductMapping
 
 logger = logging.getLogger(__name__)
-
 
 CATEGORY2_MAPPING = {
     "01": "해열진통소염제",
@@ -34,7 +32,6 @@ CATEGORY2_MAPPING = {
     "20": "기타의약품",
 }
 
-# 불용어 리스트 (상품명에서 제거할 단어들)
 STOPWORDS = {
     "정", "캡슐", "시럽", "액", "정제", "연질캡슐", "경질캡슐",
     "필름코팅정", "서방정", "장용정", "츄어블정", "발포정",
@@ -42,23 +39,12 @@ STOPWORDS = {
     "한국", "제약", "약품", "팜", "파마", "메디", "바이오",
 }
 
-
 class KeywordExtractor:
-    """키워드 추출 및 트렌드 매핑 클래스 (CDC ES 데이터 사용)"""
 
     def __init__(self):
         self.es = es_client
 
     def extract_keywords(self, product: Dict[str, Any]) -> Dict[str, List[str]]:
-        """
-        상품에서 키워드 추출
-
-        Args:
-            product: 상품 데이터 딕셔너리
-
-        Returns:
-            키워드 타입별 리스트
-        """
         keywords = {
             "name": [],
             "efficacy": [],
@@ -81,7 +67,6 @@ class KeywordExtractor:
         return keywords
 
     def _extract_name_keywords(self, name: str) -> List[str]:
-        """상품명에서 핵심 키워드 추출"""
         if not name:
             return []
 
@@ -98,7 +83,6 @@ class KeywordExtractor:
         return list(set(keywords))
 
     def _extract_efficacy_keywords(self, efficacy: str) -> List[str]:
-        """효능에서 키워드 추출"""
         if not efficacy:
             return []
 
@@ -119,7 +103,6 @@ class KeywordExtractor:
         return list(set(keywords))
 
     def _extract_ingredient_keywords(self, ingredient: str) -> List[str]:
-        """성분에서 키워드 추출"""
         if not ingredient:
             return []
 
@@ -136,7 +119,6 @@ class KeywordExtractor:
         return list(set(keywords))
 
     def _extract_category_keywords(self, category2: str) -> List[str]:
-        """카테고리 코드에서 키워드 추출"""
         if not category2:
             return []
 
@@ -148,7 +130,6 @@ class KeywordExtractor:
         return []
 
     def get_trend_data(self, limit: int = 1000) -> List[Dict[str, Any]]:
-        """ES에서 트렌드 데이터 조회"""
         try:
             query = {"match_all": {}}
             return self.es.search(
@@ -161,16 +142,6 @@ class KeywordExtractor:
             return []
 
     def get_trend_score_for_product(self, product_name: str, days: int = 30) -> Tuple[float, bool]:
-        """
-        상품명으로 직접 트렌드 데이터를 조회하고 평균 트렌드 스코어 계산
-
-        Args:
-            product_name: 상품명
-            days: 조회할 일수 (기본 30일)
-
-        Returns:
-            (trend_score, is_direct_match): 트렌드 스코어와 직접 매칭 여부
-        """
         try:
             normalized_name = self._normalize_product_name_for_trend(product_name)
 
@@ -205,15 +176,12 @@ class KeywordExtractor:
             return 0.0, False
 
     def _normalize_product_name_for_trend(self, name: str) -> str:
-        """트렌드 검색용 상품명 정규화"""
         if not name:
             return ""
 
         normalized = re.sub(r"\([^)]*\)", "", name)
         normalized = re.sub(r"\d+\.?\d*\s*(mg|ml|g|mcg|iu|정|캡슐|포|개|%)", "", normalized, flags=re.IGNORECASE)
-        # 긴 단어부터 제거해야 "정"이 "서방정" 안의 글자를 먼저 지우는 것을 방지
         dosage_forms = ["필름코팅정", "연질캡슐", "경질캡슐", "서방정", "장용정", "정제", "캡슐", "시럽", "액"]
-        # 단어 경계를 사용하여 독립된 제형 단어만 제거 (복합어 내부 파괴 방지)
         for word in dosage_forms:
             normalized = re.sub(rf"(?<![가-힣]){re.escape(word)}(?![가-힣])", "", normalized)
         normalized = re.sub(r"\s+", " ", normalized).strip()
@@ -227,18 +195,6 @@ class KeywordExtractor:
         product: Dict[str, Any],
         product_keywords: Dict[str, List[str]]
     ) -> Optional[TrendProductMapping]:
-        """
-        트렌드 키워드와 상품 키워드 매칭
-
-        Args:
-            trend_keyword: 트렌드 키워드
-            trend_score: 트렌드 점수
-            product: 상품 데이터
-            product_keywords: 추출된 상품 키워드
-
-        Returns:
-            매칭 결과 또는 None
-        """
         trend_lower = trend_keyword.lower()
         best_match_type = None
         best_match_score = 0.0
@@ -264,7 +220,6 @@ class KeywordExtractor:
         return None
 
     def _calculate_match_score(self, trend: str, keyword: str) -> float:
-        """매칭 점수 계산"""
         if trend == keyword:
             return 1.0
 
@@ -286,7 +241,6 @@ class KeywordExtractor:
         return 0.0
 
     def _get_products_from_cdc(self) -> List[Dict[str, Any]]:
-        """CDC ES에서 상품 데이터 조회"""
         logger.info("Fetching products from CDC ES...")
 
         query = {
@@ -303,7 +257,6 @@ class KeywordExtractor:
             query=query,
             size=1000
         ):
-            # Transform CDC fields to expected format
             raw_id = doc.get("id")
             try:
                 product_id = int(raw_id) if raw_id is not None else None
@@ -325,16 +278,6 @@ class KeywordExtractor:
         return results
 
     def process(self) -> Dict[str, Any]:
-        """
-        키워드 추출 및 트렌드 매핑 실행
-
-        수정된 로직:
-        1. 상품명으로 직접 트렌드 데이터 검색 (우선)
-        2. 직접 매칭 실패 시 키워드 기반 간접 매칭 (fallback)
-
-        Returns:
-            처리 결과 딕셔너리
-        """
         logger.info("Starting keyword extraction and trend mapping")
         start_time = datetime.now()
 
@@ -378,9 +321,9 @@ class KeywordExtractor:
                     mapping = TrendProductMapping(
                         product_id=product_id,
                         product_name=product_name,
-                        keyword=product_name,  # 직접 매칭이므로 상품명이 키워드
+                        keyword=product_name,
                         keyword_source="direct_match",
-                        match_score=1.0,  # 직접 매칭이므로 1.0
+                        match_score=1.0,
                         trend_score=trend_score,
                         timestamp=datetime.now()
                     )
@@ -416,7 +359,7 @@ class KeywordExtractor:
                 success_count, errors = self.es.bulk_index(
                     index=ESIndex.TREND_PRODUCT_MAPPING,
                     documents=mappings,
-                    id_field=None  # 자동 ID 생성
+                    id_field=None
                 )
                 logger.info(f"Indexed {success_count} trend-product mappings to ES")
             else:
@@ -452,12 +395,6 @@ class KeywordExtractor:
             }
 
     def extract_all_keywords(self) -> Dict[str, Any]:
-        """
-        모든 상품에서 키워드 추출 (매핑 없이) - CDC ES 사용
-
-        Returns:
-            추출된 키워드 통계
-        """
         logger.info("Extracting keywords from all products (CDC ES)")
 
         products = self._get_products_from_cdc()
@@ -490,6 +427,5 @@ class KeywordExtractor:
             "keyword_counts": {k: len(v) for k, v in result_keywords.items()},
             "message": "Keyword extraction completed"
         }
-
 
 keyword_extractor = KeywordExtractor()
