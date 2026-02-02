@@ -34,10 +34,5 @@ class ESIndex:
     PREPROCESSED_PHARMACY = "medi-db-preprocessed-pharmacy"
 
     TREND_PRODUCT_MAPPING = "medi-db-product-mapping"
-    CLUSTERING_RESULT = "medi-db-clustering-result"
-    FORECASTING_RESULT = "medi-db-forecasting-result"
-    RANKING_RESULT = "medi-db-ranking-result"
-    TARGETING_RESULT = "medi-db-targeting-result"
-    VECTOR_STORE = "medi-db-vectors"
 
 es_config = ElasticsearchConfig()

@@ -51,9 +51,6 @@ services:
           --email admin@example.com || true
         airflow connections add 'crawler_service' --conn-type 'http' --conn-host 'crawler' --conn-port '8000' || true
         airflow connections add 'preprocessor_service' --conn-type 'http' --conn-host 'preprocessor' --conn-port '8000' || true
-        airflow connections add 'clustering_service' --conn-type 'http' --conn-host 'clustering' --conn-port '8000' || true
-        airflow connections add 'forecasting_service' --conn-type 'http' --conn-host 'forecasting' --conn-port '8000' || true
-        airflow connections add 'targeting_service' --conn-type 'http' --conn-host 'targeting' --conn-port '8000' || true
 
   airflow-webserver:
     image: apache/airflow:2.7.0
@@ -130,74 +127,6 @@ services:
       timeout: 10s
       retries: 3
 
-  clustering:
-    build:
-      context: .
-      dockerfile: services/clustering/Dockerfile
-    ports:
-      - "8003:8000"
-    environment:
-      <<: *common-env
-    volumes:
-      - ./shared:/app/shared
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-
-  forecasting:
-    build:
-      context: .
-      dockerfile: services/forecasting/Dockerfile
-    ports:
-      - "8004:8000"
-    environment:
-      <<: *common-env
-    volumes:
-      - ./shared:/app/shared
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-
-  targeting:
-    build:
-      context: .
-      dockerfile: services/targeting/Dockerfile
-    ports:
-      - "8005:8000"
-    environment:
-      <<: *common-env
-    volumes:
-      - ./shared:/app/shared
-    depends_on:
-      - clustering
-      - forecasting
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-
-  dashboard:
-    build:
-      context: .
-      dockerfile: services/dashboard/Dockerfile
-    ports:
-      - "8501:8501"
-    environment:
-      <<: *common-env
-    volumes:
-      - ./shared:/app/shared
-    depends_on:
-      - targeting
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8501"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
 
 volumes:
   airflow-postgres-data:
