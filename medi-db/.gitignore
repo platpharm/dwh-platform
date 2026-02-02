@@ -152,7 +152,7 @@ celerybeat.pid
 *.feather
 *.arrow
 data/
-models/
+
 outputs/
 
 # Streamlit

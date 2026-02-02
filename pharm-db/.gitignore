@@ -280,7 +280,7 @@ celerybeat.pid
 *.npy
 *.npz
 data/
-models/
+
 outputs/
 checkpoints/
 
