@@ -46,6 +46,12 @@ COLLECTOR_REGISTRY: Dict[str, str] = {
     "health_stat": "collectors.health_stat.HealthStatCollector",
     "order_platpharm": "collectors.order_platpharm.OrderPlatpharmCollector",
     "building_ledger": "collectors.building_ledger.BuildingLedgerCollector",
+    "population_stat": "collectors.population_stat.PopulationStatCollector",
+    "business_status": "collectors.business_status.BusinessStatusCollector",
+    "commercial_zone": "collectors.commercial_zone.CommercialZoneCollector",
+    "medical_department": "collectors.medical_department.MedicalDepartmentCollector",
+    "insurance_subscriber": "collectors.insurance_subscriber.InsuranceSubscriberCollector",
+    "prescription_stat": "collectors.prescription_stat.PrescriptionStatCollector",
 }
 
 DEFAULT_COLLECTORS = list(COLLECTOR_REGISTRY.keys())
@@ -320,15 +326,21 @@ def parse_args() -> argparse.Namespace:
   python main.py --verbose                    # 상세 로그 출력
 
 사용 가능한 수집기:
-  pharmacy_nic     - 국립중앙의료원 약국 정보
-  pharmacy_hira    - 건강보험심사평가원 약국 정보
-  hospital_nic     - 국립중앙의료원 병원 정보
-  hospital_hira    - 건강보험심사평가원 병원 정보
-  store_semas      - 소상공인진흥공단 상가 정보
-  medical_type     - 의료기관종별 정보
-  health_stat      - 보건의료 통계
-  order_platpharm  - 플랫팜 발주 데이터
-  building_ledger  - 건축물대장 (면적 정보)
+  pharmacy_nic          - 국립중앙의료원 약국 정보
+  pharmacy_hira         - 건강보험심사평가원 약국 정보
+  hospital_nic          - 국립중앙의료원 병원 정보
+  hospital_hira         - 건강보험심사평가원 병원 정보
+  store_semas           - 소상공인진흥공단 상가 정보
+  medical_type          - 의료기관종별 정보
+  health_stat           - 보건의료 통계
+  order_platpharm       - 플랫팜 발주 데이터
+  building_ledger       - 건축물대장 (면적 정보)
+  population_stat       - 주민등록 인구/세대 통계
+  business_status       - 의료기관 운영상태 (폐업/휴업)
+  commercial_zone       - 상권 영역 정보
+  medical_department    - 의료기관 진료과목 상세
+  insurance_subscriber  - 건강보험 가입자 통계
+  prescription_stat     - 의약품 처방 통계
         """,
     )
 
@@ -389,6 +401,12 @@ def list_collectors() -> None:
         "health_stat": "보건의료 통계",
         "order_platpharm": "플랫팜 발주 데이터",
         "building_ledger": "건축물대장 (면적 정보)",
+        "population_stat": "주민등록 인구/세대 통계",
+        "business_status": "의료기관 운영상태 (폐업/휴업)",
+        "commercial_zone": "상권 영역 정보 (골목/발달/전통시장)",
+        "medical_department": "의료기관 진료과목 상세",
+        "insurance_subscriber": "건강보험 가입자 통계",
+        "prescription_stat": "의약품 처방 통계",
     }
 
     for name in DEFAULT_COLLECTORS:
