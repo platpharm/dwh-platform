@@ -14,8 +14,6 @@ from dotenv import load_dotenv
 from elasticsearch import Elasticsearch
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-import psycopg2
-
 load_dotenv()
 
 app = FastAPI(
@@ -37,7 +35,6 @@ class SystemHealth(BaseModel):
     overall: str
     services: List[ServiceStatus]
     elasticsearch: ServiceStatus
-    postgresql: ServiceStatus
     timestamp: str
 
 
@@ -45,10 +42,6 @@ class SystemHealth(BaseModel):
 MEDIDB_SERVICES = {
     "crawler": "http://medi-db-crawler:8000",
     "preprocessor": "http://medi-db-preprocessor:8000",
-    "clustering": "http://medi-db-clustering:8000",
-    "forecasting": "http://medi-db-forecasting:8000",
-    "targeting": "http://medi-db-targeting:8000",
-    "dashboard": "http://medi-db-dashboard:8501",
     "airflow": "http://airflow-webserver:8080",
 }
 
@@ -58,13 +51,6 @@ ES_PORT = int(os.getenv("ES_PORT", "54321"))
 ES_SCHEME = os.getenv("ES_SCHEME", "https")
 ES_USERNAME = os.getenv("ES_USERNAME", "")
 ES_PASSWORD = os.getenv("ES_PASSWORD", "")
-
-PG_HOST = os.getenv("PG_HOST", "host.docker.internal")
-PG_PORT = int(os.getenv("PG_PORT", "12345"))
-PG_DATABASE = os.getenv("PG_DATABASE", "platpharm")
-PG_USER = os.getenv("PG_USER", "postgres")
-PG_PASSWORD = os.getenv("PG_PASSWORD", "")
-
 
 async def check_service(name: str, url: str) -> ServiceStatus:
     """HTTP 서비스 상태 확인"""
@@ -133,42 +119,6 @@ def check_elasticsearch() -> ServiceStatus:
         )
 
 
-def check_postgresql() -> ServiceStatus:
-    """PostgreSQL 연결 상태 확인"""
-    start = datetime.now()
-    try:
-        conn = psycopg2.connect(
-            host=PG_HOST,
-            port=PG_PORT,
-            database=PG_DATABASE,
-            user=PG_USER,
-            password=PG_PASSWORD,
-            connect_timeout=5,
-        )
-        latency = (datetime.now() - start).total_seconds() * 1000
-
-        cursor = conn.cursor()
-        cursor.execute("SELECT version()")
-        version = cursor.fetchone()[0]
-        cursor.close()
-        conn.close()
-
-        return ServiceStatus(
-            name="postgresql",
-            status="healthy",
-            latency_ms=round(latency, 2),
-            last_check=datetime.now().isoformat(),
-            details={"version": version[:50]},
-        )
-    except Exception as e:
-        return ServiceStatus(
-            name="postgresql",
-            status="unhealthy",
-            last_check=datetime.now().isoformat(),
-            details={"error": str(e)},
-        )
-
-
 @app.get("/health")
 async def health():
     """서비스 헬스체크"""
@@ -184,12 +134,9 @@ async def get_system_health():
     ]
     services = await asyncio.gather(*service_checks)
 
-    # DB 상태 확인
     es_status = check_elasticsearch()
-    pg_status = check_postgresql()
 
-    # 전체 상태 판단
-    all_statuses = [s.status for s in services] + [es_status.status, pg_status.status]
+    all_statuses = [s.status for s in services] + [es_status.status]
     if all(s == "healthy" for s in all_statuses):
         overall = "healthy"
     elif any(s == "healthy" for s in all_statuses):
@@ -201,7 +148,6 @@ async def get_system_health():
         overall=overall,
         services=list(services),
         elasticsearch=es_status,
-        postgresql=pg_status,
         timestamp=datetime.now().isoformat(),
     )
 

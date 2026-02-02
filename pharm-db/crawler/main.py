@@ -44,7 +44,7 @@ COLLECTOR_REGISTRY: Dict[str, str] = {
     "store_semas": "collectors.store_semas.StoreSEMASCollector",
     "medical_type": "collectors.medical_type.MedicalTypeCollector",
     "health_stat": "collectors.health_stat.HealthStatCollector",
-    "order_platpharm": "collectors.order_platpharm.OrderPlatpharmCollector",
+
     "building_ledger": "collectors.building_ledger.BuildingLedgerCollector",
     "population_stat": "collectors.population_stat.PopulationStatCollector",
     "business_status": "collectors.business_status.BusinessStatusCollector",
@@ -332,7 +332,7 @@ def parse_args() -> argparse.Namespace:
   store_semas           - 소상공인진흥공단 상가 정보
   medical_type          - 의료기관종별 정보
   health_stat           - 보건의료 통계
-  order_platpharm       - 플랫팜 발주 데이터
+
   building_ledger       - 건축물대장 (면적 정보)
   population_stat       - 주민등록 인구/세대 통계
   business_status       - 의료기관 운영상태 (폐업/휴업)
@@ -397,7 +397,7 @@ def list_collectors() -> None:
         "store_semas": "소상공인진흥공단 상가 정보",
         "medical_type": "의료기관종별 정보",
         "health_stat": "보건의료 통계",
-        "order_platpharm": "플랫팜 발주 데이터",
+
         "building_ledger": "건축물대장 (면적 정보)",
         "population_stat": "주민등록 인구/세대 통계",
         "business_status": "의료기관 운영상태 (폐업/휴업)",

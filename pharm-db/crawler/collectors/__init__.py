@@ -11,7 +11,7 @@ Collectors Sub-module
     - StoreSEMASCollector: 소상공인진흥공단 상가 정보
     - MedicalTypeCollector: 건강보험심사평가원 의료기관종별
     - HealthStatCollector: 건강보험심사평가원 보건의료 통계
-    - OrderPlatpharmCollector: 플랫팜 의약품 발주 (RDBMS)
+
     - BuildingLedgerCollector: 국토교통부 건축물대장 (면적 정보)
 """
 
@@ -22,7 +22,7 @@ from .hospital_hira import HospitalHIRACollector
 from .store_semas import StoreSEMASCollector
 from .medical_type import MedicalTypeCollector
 from .health_stat import HealthStatCollector
-from .order_platpharm import OrderPlatpharmCollector
+
 from .building_ledger import BuildingLedgerCollector
 
 __all__ = [
@@ -33,6 +33,6 @@ __all__ = [
     "StoreSEMASCollector",
     "MedicalTypeCollector",
     "HealthStatCollector",
-    "OrderPlatpharmCollector",
+
     "BuildingLedgerCollector",
 ]

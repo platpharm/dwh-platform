@@ -7,21 +7,11 @@ x-common-env: &common-env
   ES_SCHEME: ${ES_SCHEME:-http}
   ES_USERNAME: ${ES_USERNAME:-}
   ES_PASSWORD: ${ES_PASSWORD:-}
-  PG_HOST: host.docker.internal
-  PG_PORT: ${PG_PORT:-12345}
-  PG_DATABASE: ${PG_DATABASE:-platpharm}
-  PG_USER: ${PG_USER:-postgres}
-  PG_PASSWORD: ${PG_PASSWORD:-}
   TZ: Asia/Seoul
 
 x-pharm-crawler-env: &pharm-crawler-env
   ES_HOST: host.docker.internal
   ES_PORT: ${ES_PORT:-54321}
-  RDBMS_HOST: host.docker.internal
-  RDBMS_PORT: ${PG_PORT:-12345}
-  RDBMS_DATABASE: ${PG_DATABASE:-platpharm}
-  RDBMS_USER: ${PG_USER:-postgres}
-  RDBMS_PASSWORD: ${PG_PASSWORD:-}
   DATA_GO_KR_API_KEY: ${DATA_GO_KR_API_KEY:-}
   TZ: Asia/Seoul
 

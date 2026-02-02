@@ -3,11 +3,6 @@
 x-common-env: &common-env
   ES_HOST: host.docker.internal
   ES_PORT: ${ES_PORT:-54321}
-  RDBMS_HOST: host.docker.internal
-  RDBMS_PORT: ${RDBMS_PORT:-12345}
-  RDBMS_DATABASE: ${RDBMS_DATABASE:-platpharm}
-  RDBMS_USER: ${RDBMS_USER:-postgres}
-  RDBMS_PASSWORD: ${RDBMS_PASSWORD:-}
   DATA_GO_KR_API_KEY: ${DATA_GO_KR_API_KEY:-}
   TZ: Asia/Seoul
 

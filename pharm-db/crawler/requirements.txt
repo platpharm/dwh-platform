@@ -9,8 +9,5 @@ python-dotenv>=1.0.0,<2.0.0
 # Elasticsearch 클라이언트
 elasticsearch>=8.0.0,<10.0.0
 
-# PostgreSQL 드라이버
-psycopg2-binary>=2.9.9,<3.0.0
-
 # HTTP 연결 관리
 urllib3>=2.0.0,<3.0.0

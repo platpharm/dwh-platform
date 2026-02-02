@@ -17,7 +17,6 @@
 | `store_semas`     | 소상공인시장진흥공단 | 상가 정보         |
 | `medical_type`    | 건강보험심사평가원   | 의료기관종별      |
 | `health_stat`     | 건강보험심사평가원   | 보건의료 통계     |
-| `order_platpharm` | 플랫팜 RDBMS         | 의약품 발주       |
 | `building_ledger` | 국토교통부           | 건축물대장 (면적) |
 
 ## 설치
@@ -43,12 +42,6 @@ DATA_GO_KR_API_KEY=your_api_key
 ES_HOST=localhost
 ES_PORT=54321
 
-# RDBMS (플랫팜)
-DB_HOST=localhost
-DB_PORT=12345
-DB_USER=your_user
-DB_PASSWORD=your_password
-DB_NAME=platpharm
 ```
 
 ## 사용법
@@ -94,7 +87,6 @@ crawler/
 │   ├── store_semas.py
 │   ├── medical_type.py
 │   ├── health_stat.py
-│   ├── order_platpharm.py
 │   └── building_ledger.py
 └── utils/
     ├── api_client.py    # 공공데이터 API 클라이언트
@@ -105,4 +97,3 @@ crawler/
 
 - Python 3.9+
 - Elasticsearch 8.x
-- PostgreSQL (플랫팜 발주 데이터)

@@ -23,13 +23,6 @@ class Config:
     ES_USER = os.getenv("ES_USER", "elastic")
     ES_PASSWORD = os.getenv("ES_PASSWORD", "")
 
-    # RDBMS (PostgreSQL/MySQL) - 플랫팜 발주 데이터
-    RDBMS_HOST = os.getenv("RDBMS_HOST", "localhost")
-    RDBMS_PORT = int(os.getenv("RDBMS_PORT", "12345"))
-    RDBMS_DATABASE = os.getenv("RDBMS_DATABASE", "")
-    RDBMS_USER = os.getenv("RDBMS_USER", "")
-    RDBMS_PASSWORD = os.getenv("RDBMS_PASSWORD", "")
-
     # HTTP 요청 설정
     MAX_RETRIES = 3
     RETRY_DELAY = 1.0
@@ -71,13 +64,6 @@ CONFIG = {
     },
     "data_go_kr": {
         "service_key": config.DATA_GO_KR_API_KEY,
-    },
-    "rdbms": {
-        "host": config.RDBMS_HOST,
-        "port": config.RDBMS_PORT,
-        "database": config.RDBMS_DATABASE,
-        "user": config.RDBMS_USER,
-        "password": config.RDBMS_PASSWORD,
     },
     "endpoints": config.ENDPOINTS,
 }

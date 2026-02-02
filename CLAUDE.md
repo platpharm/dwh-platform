@@ -94,9 +94,6 @@ aws secretsmanager get-secret-value --secret-id platpharm-elasticsearch-prod --q
 
 # PharmDB 공공데이터포털 API Key
 aws secretsmanager get-secret-value --secret-id pharm-db/data-go-kr-api-key --query SecretString --output text
-
-# PostgreSQL credentials
-aws secretsmanager get-secret-value --secret-id prod/platpharm/postgresql --query SecretString --output text
 ```
 
 ### SSH Tunnels (for local development)

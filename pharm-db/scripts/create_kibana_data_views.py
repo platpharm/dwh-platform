@@ -63,11 +63,6 @@ DATA_VIEWS = [
         "timeFieldName": "collected_at",
     },
     {
-        "name": "PharmDB - 플랫팜 발주",
-        "title": "order_platpharm",
-        "timeFieldName": None,
-    },
-    {
         "name": "PharmDB - 건축물대장",
         "title": "building_ledger",
         "timeFieldName": None,
