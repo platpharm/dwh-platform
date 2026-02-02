@@ -50,7 +50,6 @@ COLLECTOR_REGISTRY: Dict[str, str] = {
     "business_status": "collectors.business_status.BusinessStatusCollector",
     "commercial_zone": "collectors.commercial_zone.CommercialZoneCollector",
     "medical_department": "collectors.medical_department.MedicalDepartmentCollector",
-    "insurance_subscriber": "collectors.insurance_subscriber.InsuranceSubscriberCollector",
     "prescription_stat": "collectors.prescription_stat.PrescriptionStatCollector",
 }
 
@@ -339,7 +338,6 @@ def parse_args() -> argparse.Namespace:
   business_status       - 의료기관 운영상태 (폐업/휴업)
   commercial_zone       - 상권 영역 정보
   medical_department    - 의료기관 진료과목 상세
-  insurance_subscriber  - 건강보험 가입자 통계
   prescription_stat     - 의약품 처방 통계
         """,
     )
@@ -405,7 +403,6 @@ def list_collectors() -> None:
         "business_status": "의료기관 운영상태 (폐업/휴업)",
         "commercial_zone": "상권 영역 정보 (골목/발달/전통시장)",
         "medical_department": "의료기관 진료과목 상세",
-        "insurance_subscriber": "건강보험 가입자 통계",
         "prescription_stat": "의약품 처방 통계",
     }
 
