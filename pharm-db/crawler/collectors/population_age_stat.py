@@ -1,11 +1,11 @@
 """
-행정안전부 행정동별(통반단위) 주민등록 인구 및 세대현황 수집기
+행정안전부 행정동별(통반단위) 성/연령별 주민등록 인구수 수집기
 
 데이터 소스: 행정안전부 주민등록 인구통계
-API: https://apis.data.go.kr/1741000/admmPpltnHhStus/selectAdmmPpltnHhStus
-공공데이터 PK: 15108065
+API: https://apis.data.go.kr/1741000/admmSexdAgePpltn/selectAdmmSexdAgePpltn
+공공데이터 PK: 15108072
 
-ES 인덱스: population_stat
+ES 인덱스: population_age_stat
 
 조회 레벨:
     - lv=1: 시도 단위
@@ -16,21 +16,22 @@ ES 인덱스: population_stat
 import time
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
+from urllib.parse import quote
 
 from crawler.base_collector import BaseCollector
 from crawler.config import CONFIG
 
 
-class PopulationStatCollector(BaseCollector):
+class PopulationAgeStatCollector(BaseCollector):
     """
-    행정안전부 행정동별(통반단위) 주민등록 인구 및 세대현황 수집기
+    행정안전부 행정동별(통반단위) 성/연령별 주민등록 인구수 수집기
 
-    전국 행정동별로 인구 및 세대 통계를 수집합니다.
+    전국 행정동별로 연령대별 인구 통계를 수집합니다.
     """
 
-    BASE_URL = "https://apis.data.go.kr/1741000/admmPpltnHhStus"
-    ENDPOINT = "/selectAdmmPpltnHhStus"
-    ES_INDEX = "population_stat"
+    BASE_URL = "https://apis.data.go.kr/1741000/admmSexdAgePpltn"
+    ENDPOINT = "/selectAdmmSexdAgePpltn"
+    ES_INDEX = "population_age_stat"
     PAGE_SIZE = 100
 
     SIDO_CODES = {
@@ -53,9 +54,12 @@ class PopulationStatCollector(BaseCollector):
         "5000000000": "제주특별자치도",
     }
 
+    AGE_GROUPS = ["0", "10", "20", "30", "40", "50", "60", "70", "80", "90", "100"]
+
     def __init__(self):
-        super().__init__(name="PopulationStatCollector")
+        super().__init__(name="PopulationAgeStatCollector")
         self.service_key = CONFIG["data_go_kr"]["service_key"]
+        self.service_key_encoded = quote(self.service_key, safe="")
 
         if not self.service_key:
             self.logger.warning(
@@ -77,7 +81,7 @@ class PopulationStatCollector(BaseCollector):
         level: str = "dong",
     ) -> List[Dict[str, Any]]:
         """
-        전국 인구/세대 통계 수집
+        전국 연령별 인구통계 수집
 
         Args:
             srch_fr_ym: 조회 시작연월 (YYYYMM). None이면 전월
@@ -85,7 +89,7 @@ class PopulationStatCollector(BaseCollector):
             level: 조회 레벨 ("sido", "sigungu", "dong")
 
         Returns:
-            수집된 인구 통계 리스트
+            수집된 연령별 인구 통계 리스트
         """
         if srch_fr_ym is None or srch_to_ym is None:
             default_fr, default_to = self._get_default_search_period()
@@ -93,7 +97,7 @@ class PopulationStatCollector(BaseCollector):
             srch_to_ym = srch_to_ym or default_to
 
         self.logger.info(
-            f"주민등록 인구통계 수집 시작 (기간: {srch_fr_ym} ~ {srch_to_ym}, 레벨: {level})"
+            f"연령별 인구통계 수집 시작 (기간: {srch_fr_ym} ~ {srch_to_ym}, 레벨: {level})"
         )
 
         if level == "sido":
@@ -109,12 +113,12 @@ class PopulationStatCollector(BaseCollector):
         all_data = []
 
         for sido_cd, sido_nm in self.SIDO_CODES.items():
-            self.logger.info(f"[{sido_nm}] 시도 인구통계 수집")
+            self.logger.info(f"[{sido_nm}] 시도 연령별 인구통계 수집")
             items = self._request_and_parse(sido_cd, srch_fr_ym, srch_to_ym, lv="1")
             all_data.extend(items)
             time.sleep(0.05)
 
-        self.logger.info(f"시도 인구통계 수집 완료: {len(all_data)}건")
+        self.logger.info(f"시도 연령별 인구통계 수집 완료: {len(all_data)}건")
         return all_data
 
     def _collect_sigungu_level(
@@ -123,13 +127,13 @@ class PopulationStatCollector(BaseCollector):
         all_data = []
 
         for sido_cd, sido_nm in self.SIDO_CODES.items():
-            self.logger.info(f"[{sido_nm}] 시군구 인구통계 수집")
+            self.logger.info(f"[{sido_nm}] 시군구 연령별 인구통계 수집")
             items = self._request_and_parse(sido_cd, srch_fr_ym, srch_to_ym, lv="2")
             all_data.extend(items)
             self.logger.info(f"[{sido_nm}] 시군구 수집 완료: {len(items)}건")
             time.sleep(0.05)
 
-        self.logger.info(f"시군구 인구통계 수집 완료: {len(all_data)}건")
+        self.logger.info(f"시군구 연령별 인구통계 수집 완료: {len(all_data)}건")
         return all_data
 
     def _collect_dong_level(
@@ -160,7 +164,7 @@ class PopulationStatCollector(BaseCollector):
             self.logger.info(f"[{sido_nm}] 행정동 수집 완료")
             time.sleep(0.1)
 
-        self.logger.info(f"전체 행정동 인구통계 수집 완료: {len(all_data)}건")
+        self.logger.info(f"전체 행정동 연령별 인구통계 수집 완료: {len(all_data)}건")
         return all_data
 
     def _request_and_parse(
@@ -199,20 +203,19 @@ class PopulationStatCollector(BaseCollector):
         page_no: int,
         lv: str = "1"
     ) -> Optional[Dict[str, Any]]:
-        url = f"{self.BASE_URL}{self.ENDPOINT}"
+        url = (
+            f"{self.BASE_URL}{self.ENDPOINT}"
+            f"?serviceKey={self.service_key_encoded}"
+            f"&admmCd={admm_cd}"
+            f"&srchFrYm={srch_fr_ym}"
+            f"&srchToYm={srch_to_ym}"
+            f"&lv={lv}"
+            f"&type=json"
+            f"&numOfRows={self.PAGE_SIZE}"
+            f"&pageNo={page_no}"
+        )
 
-        params = {
-            "serviceKey": self.service_key,
-            "pageNo": page_no,
-            "numOfRows": self.PAGE_SIZE,
-            "type": "json",
-            "admmCd": admm_cd,
-            "srchFrYm": srch_fr_ym,
-            "srchToYm": srch_to_ym,
-            "lv": lv,
-        }
-
-        response = self._make_request(url, params=params)
+        response = self._make_request(url)
 
         if response is None:
             return None
@@ -271,17 +274,20 @@ class PopulationStatCollector(BaseCollector):
                 "tot_nmpr_cnt": self._safe_int(item.get("totNmprCnt")),
                 "male_nmpr_cnt": self._safe_int(item.get("maleNmprCnt")),
                 "feml_nmpr_cnt": self._safe_int(item.get("femlNmprCnt")),
-                "male_feml_rate": item.get("maleFemlRate"),
-                "hh_cnt": self._safe_int(item.get("hhCnt")),
-                "hh_nmpr": item.get("hhNmpr"),
                 "collected_at": collected_at,
                 "_doc_id": f"{stats_ym}_{admm_cd}",
             }
 
+            for age in self.AGE_GROUPS:
+                male_key = f"male{age}AgeNmprCnt"
+                feml_key = f"feml{age}AgeNmprCnt"
+                parsed[f"male_{age}_age"] = self._safe_int(item.get(male_key))
+                parsed[f"feml_{age}_age"] = self._safe_int(item.get(feml_key))
+
             return {k: v for k, v in parsed.items() if v is not None}
 
         except Exception as e:
-            self.logger.error(f"인구통계 항목 파싱 오류: {e}")
+            self.logger.error(f"연령별 인구통계 항목 파싱 오류: {e}")
             return None
 
     def _safe_int(self, value: Any) -> Optional[int]:
@@ -302,12 +308,12 @@ class PopulationStatCollector(BaseCollector):
         Returns:
             저장 결과 통계
         """
-        self.logger.info(f"PopulationStatCollector 실행 시작 (레벨: {level})")
+        self.logger.info(f"PopulationAgeStatCollector 실행 시작 (레벨: {level})")
 
         data = self.collect(level=level)
 
         if not data:
-            self.logger.warning("수집된 인구통계 데이터가 없습니다.")
+            self.logger.warning("수집된 연령별 인구통계 데이터가 없습니다.")
             return {"success": 0, "failed": 0}
 
         result = self.save_to_es(
@@ -317,7 +323,7 @@ class PopulationStatCollector(BaseCollector):
         )
 
         self.logger.info(
-            f"PopulationStatCollector 실행 완료: "
+            f"PopulationAgeStatCollector 실행 완료: "
             f"성공={result['success']}, 실패={result['failed']}"
         )
 
@@ -327,7 +333,7 @@ class PopulationStatCollector(BaseCollector):
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser(description="인구통계 수집기")
+    parser = argparse.ArgumentParser(description="연령별 인구통계 수집기")
     parser.add_argument(
         "--level",
         type=str,
@@ -338,5 +344,5 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    collector = PopulationStatCollector()
+    collector = PopulationAgeStatCollector()
     collector.run(level=args.level)

@@ -22,6 +22,7 @@ ES 인덱스: building_ledger
 
 import time
 from typing import Any, Dict, List, Optional
+from urllib.parse import quote
 from xml.etree import ElementTree
 
 from crawler.base_collector import BaseCollector
@@ -115,6 +116,17 @@ class BuildingLedgerCollector(BaseCollector):
             self.logger.error(f"건물관리번호 파싱 오류: {bld_mng_no}, {e}")
             return None
 
+    def _build_url_with_encoded_key(
+        self,
+        endpoint: str,
+        params: Dict[str, Any]
+    ) -> str:
+        encoded_key = quote(self.service_key, safe='')
+        param_parts = [f"serviceKey={encoded_key}"]
+        for k, v in params.items():
+            param_parts.append(f"{k}={v}")
+        return f"{self.BASE_URL}{endpoint}?{'&'.join(param_parts)}"
+
     def get_title_info(
         self,
         sigungu_cd: str,
@@ -136,10 +148,7 @@ class BuildingLedgerCollector(BaseCollector):
         Returns:
             건축물대장 총괄표제부 정보 리스트 또는 None
         """
-        url = f"{self.BASE_URL}{self.ENDPOINT_TITLE_INFO}"
-
         params = {
-            "serviceKey": self.service_key,
             "sigunguCd": sigungu_cd,
             "bjdongCd": bjdong_cd,
             "platGbCd": plat_gb_cd,
@@ -149,9 +158,11 @@ class BuildingLedgerCollector(BaseCollector):
             "pageNo": 1,
         }
 
-        response = self._make_request(url, params=params)
+        url = self._build_url_with_encoded_key(self.ENDPOINT_TITLE_INFO, params)
+        response = self.session.get(url, timeout=30)
 
-        if response is None:
+        if response.status_code != 200:
+            self.logger.error(f"API 요청 실패: status={response.status_code}")
             return None
 
         return self._parse_title_info_response(response.text)
@@ -256,14 +267,11 @@ class BuildingLedgerCollector(BaseCollector):
         Returns:
             전유공용면적 정보 리스트 또는 None
         """
-        url = f"{self.BASE_URL}{self.ENDPOINT_EXPOS_AREA}"
-
         all_items = []
         page_no = 1
 
         while True:
             params = {
-                "serviceKey": self.service_key,
                 "sigunguCd": sigungu_cd,
                 "bjdongCd": bjdong_cd,
                 "platGbCd": plat_gb_cd,
@@ -273,9 +281,10 @@ class BuildingLedgerCollector(BaseCollector):
                 "pageNo": page_no,
             }
 
-            response = self._make_request(url, params=params)
+            url = self._build_url_with_encoded_key(self.ENDPOINT_EXPOS_AREA, params)
+            response = self.session.get(url, timeout=30)
 
-            if response is None:
+            if response.status_code != 200:
                 break
 
             result = self._parse_expos_area_response(response.text)
@@ -294,7 +303,7 @@ class BuildingLedgerCollector(BaseCollector):
                 break
 
             page_no += 1
-            time.sleep(0.05)  # API 부하 방지
+            time.sleep(0.05)
 
         return all_items if all_items else None
 
@@ -386,21 +395,30 @@ class BuildingLedgerCollector(BaseCollector):
         if params is None:
             return None
 
-        title_info = self.get_title_info(
-            sigungu_cd=params["sigunguCd"],
-            bjdong_cd=params["bjdongCd"],
-            bun=params["bun"],
-            ji=params["ji"],
-            plat_gb_cd=params["platGbCd"]
-        )
+        title_info = None
+        expos_area = None
+        used_plat_gb_cd = None
 
-        expos_area = self.get_expos_pubuse_area(
-            sigungu_cd=params["sigunguCd"],
-            bjdong_cd=params["bjdongCd"],
-            bun=params["bun"],
-            ji=params["ji"],
-            plat_gb_cd=params["platGbCd"]
-        )
+        for plat_gb_cd in ["0", "1"]:
+            title_info = self.get_title_info(
+                sigungu_cd=params["sigunguCd"],
+                bjdong_cd=params["bjdongCd"],
+                bun=params["bun"],
+                ji=params["ji"],
+                plat_gb_cd=plat_gb_cd
+            )
+            if title_info:
+                used_plat_gb_cd = plat_gb_cd
+                break
+
+        if used_plat_gb_cd:
+            expos_area = self.get_expos_pubuse_area(
+                sigungu_cd=params["sigunguCd"],
+                bjdong_cd=params["bjdongCd"],
+                bun=params["bun"],
+                ji=params["ji"],
+                plat_gb_cd=used_plat_gb_cd
+            )
 
         result = {
             "bldMngNo": bld_mng_no,

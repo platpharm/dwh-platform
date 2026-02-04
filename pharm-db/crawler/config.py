@@ -17,6 +17,9 @@ class Config:
     # 공공데이터 포털 (data.go.kr) API
     DATA_GO_KR_API_KEY = os.getenv("DATA_GO_KR_API_KEY", "")
 
+    # Vworld API (국가공간정보포털)
+    VWORLD_API_KEY = os.getenv("VWORLD_API_KEY", "")
+
     # Elasticsearch 설정
     ES_HOST = os.getenv("ES_HOST", "localhost")
     ES_PORT = int(os.getenv("ES_PORT", "54321"))
@@ -49,6 +52,10 @@ class Config:
         "health_stat_drug_usage": "https://apis.data.go.kr/B551182/msupUserInfoService1.2/getMeftDivAreaList1.2",
         # 국토교통부 건축물대장
         "building_ledger": "http://apis.data.go.kr/1613000/BldRgstHubService/getBrTitleInfo",
+        # 행정안전부 인구통계
+        "population_stat": "https://apis.data.go.kr/1741000/admmPpltnHhStus/selectAdmmPpltnHhStus",
+        # 행정안전부 연령별 인구통계
+        "population_age_stat": "https://apis.data.go.kr/1741000/admmSexdAgePpltn/selectAdmmSexdAgePpltn",
     }
 
 
@@ -64,6 +71,9 @@ CONFIG = {
     },
     "data_go_kr": {
         "service_key": config.DATA_GO_KR_API_KEY,
+    },
+    "vworld": {
+        "api_key": config.VWORLD_API_KEY,
     },
     "endpoints": config.ENDPOINTS,
 }
